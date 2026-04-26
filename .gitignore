@@ -67,3 +67,23 @@ vcpkg_installed/
 # test output & cache
 Testing/
 .cache/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.venv/
+.pytest_cache/
+
+# Java / Maven
+target/
+*.class
+
+# Go
+*.test
+coverage.out
+
+# IDE / editor
+.idea/
+.vscode/

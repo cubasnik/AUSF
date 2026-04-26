@@ -1,0 +1,25 @@
+services:
+  ausf-go:
+    build:
+      context: ./microservices
+      dockerfile: Dockerfile
+    container_name: ausf-go
+    environment:
+      AUSF_HOST: 0.0.0.0
+      AUSF_PORT: 8080
+      CONTROL_PLANE_BASE_URL: http://ausf-control-plane:8081
+    ports:
+      - "8080:8080"
+    depends_on:
+      - ausf-control-plane
+
+  ausf-control-plane:
+    build:
+      context: ./control-plane
+      dockerfile: Dockerfile
+    container_name: ausf-control-plane
+    environment:
+      SERVER_PORT: 8081
+      AUSF_SUBSCRIBER_STORE: /app/data/subscribers.json
+    ports:
+      - "8081:8081"
