@@ -55,14 +55,50 @@ class NnrfClientTest {
     @Test
     void shouldWrapDiscoveryFailures() {
         RestClient.Builder builder = RestClient.builder();
-        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+      MockRestServiceServer server = MockRestServiceServer.bindTo(builder).ignoreExpectOrder(true).build();
         NnrfClient client = new NnrfClient(builder, "http://mock-nrf:8091");
 
         server.expect(requestTo("http://mock-nrf:8091/nnrf-disc/v1/nf-instances?target-nf-type=UDM&requester-nf-type=AUSF"))
             .andExpect(method(GET))
             .andRespond(withServerError());
+      server.expect(requestTo("http://mock-nrf:8091/nnrf-disc/v1/nf-instances?target-nf-type=UDM&requester-nf-type=AUSF"))
+        .andExpect(method(GET))
+        .andRespond(withServerError());
+      server.expect(requestTo("http://mock-nrf:8091/nnrf-disc/v1/nf-instances?target-nf-type=UDM&requester-nf-type=AUSF"))
+        .andExpect(method(GET))
+        .andRespond(withServerError());
 
         assertThrows(IllegalStateException.class, client::resolveUdmBaseUrl);
+        server.verify();
+    }
+
+    @Test
+    void shouldRetryTransientDiscoveryFailure() {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).ignoreExpectOrder(true).build();
+        NnrfClient client = new NnrfClient(builder, "http://mock-nrf:8091");
+
+        server.expect(requestTo("http://mock-nrf:8091/nnrf-disc/v1/nf-instances?target-nf-type=UDM&requester-nf-type=AUSF"))
+            .andExpect(method(GET))
+            .andRespond(withServerError());
+        server.expect(requestTo("http://mock-nrf:8091/nnrf-disc/v1/nf-instances?target-nf-type=UDM&requester-nf-type=AUSF"))
+            .andExpect(method(GET))
+            .andRespond(withSuccess(
+                """
+                {
+                  "nfInstances": [
+                    {
+                      "services": [
+                        {"serviceName": "nudm-ueau", "apiPrefix": "http://mock-udm:8090/"}
+                      ]
+                    }
+                  ]
+                }
+                """,
+                MediaType.APPLICATION_JSON
+            ));
+
+        assertEquals(Optional.of("http://mock-udm:8090"), client.resolveUdmBaseUrl());
         server.verify();
     }
 }

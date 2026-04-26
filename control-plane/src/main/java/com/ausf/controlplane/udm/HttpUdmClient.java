@@ -1,17 +1,22 @@
 package com.ausf.controlplane.udm;
 
 import java.util.Optional;
+import java.util.function.Supplier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.HttpClientErrorException;
+import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
 @Component
 @ConditionalOnProperty(name = "ausf.udm.mode", havingValue = "http")
 public class HttpUdmClient implements UdmClient {
+    private static final int MAX_ATTEMPTS = 3;
+    private static final long BACKOFF_MILLIS = 200L;
+
     private final RestClient.Builder restClientBuilder;
     private final NnrfClient nnrfClient;
     private final String configuredBaseUrl;
@@ -29,12 +34,12 @@ public class HttpUdmClient implements UdmClient {
     @Override
     public Optional<UdmAuthenticationData> getAuthenticationData(String supi, String servingNetworkName, String authType) {
         try {
-            UdmGenerateAuthDataResponse response = restClientBuilder.baseUrl(resolveBaseUrl()).build().post()
+            UdmGenerateAuthDataResponse response = executeWithRetry(() -> restClientBuilder.baseUrl(resolveBaseUrl()).build().post()
                 .uri("/nudm-ueau/v1/{supi}/security-information/generate-auth-data", supi)
                 .contentType(MediaType.APPLICATION_JSON)
                 .body(new UdmGenerateAuthDataRequest(servingNetworkName, authType))
                 .retrieve()
-                .body(UdmGenerateAuthDataResponse.class);
+                .body(UdmGenerateAuthDataResponse.class));
 
             if (response == null) {
                 throw new IllegalStateException("UDM returned an empty authentication data response");
@@ -79,6 +84,42 @@ public class HttpUdmClient implements UdmClient {
 
     private String sanitizeBaseUrl(String value) {
         return value == null ? "" : value.replaceAll("/+$", "");
+    }
+
+    private <T> T executeWithRetry(Supplier<T> call) {
+        RestClientException lastException = null;
+        for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+            try {
+                return call.get();
+            } catch (RestClientException exception) {
+                lastException = exception;
+                if (!shouldRetry(exception) || attempt == MAX_ATTEMPTS) {
+                    throw exception;
+                }
+                sleepBeforeRetry(attempt);
+            }
+        }
+
+        throw lastException;
+    }
+
+    private boolean shouldRetry(RestClientException exception) {
+        if (exception instanceof HttpClientErrorException.NotFound) {
+            return false;
+        }
+        if (exception instanceof RestClientResponseException responseException) {
+            return responseException.getStatusCode().is5xxServerError();
+        }
+        return true;
+    }
+
+    private void sleepBeforeRetry(int attempt) {
+        try {
+            Thread.sleep(BACKOFF_MILLIS * attempt);
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("retry interrupted", exception);
+        }
     }
 
     static class UdmGenerateAuthDataRequest {

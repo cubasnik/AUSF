@@ -10,6 +10,7 @@ import static org.springframework.http.HttpMethod.POST;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.content;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withServerError;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withResourceNotFound;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
@@ -98,6 +99,45 @@ class HttpUdmClientTest {
         );
 
         assertEquals("challenge", result.orElseThrow().getAuthenticationVector().getEapChallenge());
+        server.verify();
+    }
+
+    @Test
+    void shouldRetryOnTransientUdmFailure() {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).ignoreExpectOrder(true).build();
+        NnrfClient nnrfClient = mock(NnrfClient.class);
+        HttpUdmClient client = new HttpUdmClient(builder, nnrfClient, "http://mock-udm:8090");
+
+        server.expect(requestTo("http://mock-udm:8090/nudm-ueau/v1/imsi-001/security-information/generate-auth-data"))
+            .andExpect(method(POST))
+            .andRespond(withServerError());
+        server.expect(requestTo("http://mock-udm:8090/nudm-ueau/v1/imsi-001/security-information/generate-auth-data"))
+            .andExpect(method(POST))
+            .andRespond(withSuccess(
+                """
+                {
+                  "supi": "imsi-001",
+                  "authType": "5G_AKA",
+                  "servingNetworkName": "5G:mnc001.mcc001.3gppnetwork.org",
+                  "rand": "rand",
+                  "autn": "autn",
+                  "xresStar": "xres",
+                  "hxresStar": "hxres",
+                  "kausf": "kausf",
+                  "eapChallenge": null
+                }
+                """,
+                MediaType.APPLICATION_JSON
+            ));
+
+        Optional<UdmAuthenticationData> result = client.getAuthenticationData(
+            "imsi-001",
+            "5G:mnc001.mcc001.3gppnetwork.org",
+            "5G_AKA"
+        );
+
+        assertEquals("kausf", result.orElseThrow().getAuthenticationVector().getKausf());
         server.verify();
     }
 

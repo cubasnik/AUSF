@@ -271,6 +271,7 @@ Services:
 - Java control-plane service: `http://localhost:8081`
 - Mock UDM service: `http://localhost:8090`
 - Mock NRF service: `http://localhost:8091`
+- Mock AMF service: `http://localhost:8092`
 
 Important runtime variables:
 
@@ -279,6 +280,7 @@ Important runtime variables:
 - `AUSF_UDM_MODE` selects the UDM integration mode: `mock` or `http`.
 - `AUSF_UDM_BASE_URL` points the control-plane directly at an external UDM when `AUSF_UDM_MODE=http`.
 - `AUSF_NNRF_BASE_URL` points the control-plane at an external NRF discovery service when the UDM location should be resolved dynamically.
+- `AUSF_NAMF_BASE_URL` points the Go AUSF service at an AMF-facing status notification endpoint.
 
 When `AUSF_NNRF_BASE_URL` is set and `AUSF_UDM_BASE_URL` is empty, the control-plane first calls:
 
@@ -314,6 +316,23 @@ Expected request body:
 }
 ```
 
+When `AUSF_NAMF_BASE_URL` is set, the Go AUSF service sends a southbound notification after successful confirmation:
+
+- `POST /namf-comm/v1/ue-authentications/{authCtxId}/status-notify`
+
+Expected request body:
+
+```json
+{
+  "authCtxId": "auth-1",
+  "supi": "imsi-001010000000001",
+  "authType": "5G_AKA",
+  "servingNetworkName": "5G:mnc001.mcc001.3gppnetwork.org",
+  "authResult": "SUCCESS",
+  "kseaf": "..."
+}
+```
+
 Expected response body:
 
 ```json
@@ -341,7 +360,7 @@ This workspace is intentionally a foundation. The following are not implemented 
 - Production-grade security, TLS, OAuth2, and SBI authorization.
 - Full 5G AKA and EAP-AKA' state machines.
 - Real PFCP data plane integration.
-- Retry, circuit breaking, and tracing between Go and Java services.
+- Circuit breaking and tracing between Go and Java services.
 
 ## Validation status
 
@@ -352,6 +371,7 @@ Validated in the current environment:
 - IDE diagnostics for the edited Go and Java sources are clean.
 - Docker Compose stack with `mock-nrf` and `mock-udm` starts successfully.
 - `python automation/scripts/smoke_test_http_udm.py` passes against the HTTP UDM mode.
+- The HTTP UDM smoke now also validates a mock Namf southbound notification path.
 
 Not fully validated in the current environment:
 

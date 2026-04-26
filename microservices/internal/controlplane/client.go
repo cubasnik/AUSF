@@ -4,9 +4,15 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"time"
+)
+
+const (
+	maxAttempts = 3
+	baseBackoff = 200 * time.Millisecond
 )
 
 type Client struct {
@@ -75,24 +81,57 @@ func (client *Client) doJSON(method string, path string, payload any) (Authentic
 		}
 	}
 
-	httpRequest, err := http.NewRequest(method, client.baseURL+path, bytes.NewReader(body))
-	if err != nil {
-		return AuthenticationResponse{}, err
-	}
-	if payload != nil {
-		httpRequest.Header.Set("Content-Type", "application/json")
+	var lastErr error
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		httpRequest, requestErr := http.NewRequest(method, client.baseURL+path, bytes.NewReader(body))
+		if requestErr != nil {
+			return AuthenticationResponse{}, requestErr
+		}
+		if payload != nil {
+			httpRequest.Header.Set("Content-Type", "application/json")
+		}
+
+		response, requestErr := client.httpClient.Do(httpRequest)
+		if requestErr != nil {
+			lastErr = requestErr
+			if attempt == maxAttempts {
+				return AuthenticationResponse{}, requestErr
+			}
+			time.Sleep(backoffDuration(attempt))
+			continue
+		}
+
+		result, responseErr := decodeResponse(response)
+		if responseErr != nil {
+			lastErr = responseErr
+			if attempt == maxAttempts || response.StatusCode < 500 {
+				return AuthenticationResponse{}, responseErr
+			}
+			time.Sleep(backoffDuration(attempt))
+			continue
+		}
+
+		return result, nil
 	}
 
-	response, err := client.httpClient.Do(httpRequest)
-	if err != nil {
-		return AuthenticationResponse{}, err
-	}
+	return AuthenticationResponse{}, lastErr
+}
+
+func decodeResponse(response *http.Response) (AuthenticationResponse, error) {
 	defer response.Body.Close()
 
 	var result AuthenticationResponse
-	if err := json.NewDecoder(response.Body).Decode(&result); err != nil {
+	responseBody, err := io.ReadAll(response.Body)
+	if err != nil {
 		return AuthenticationResponse{}, err
 	}
+
+	if len(responseBody) > 0 {
+		if err := json.Unmarshal(responseBody, &result); err != nil {
+			return AuthenticationResponse{}, err
+		}
+	}
+
 	if response.StatusCode >= 400 {
 		message := result.Message
 		if message == "" {
@@ -100,5 +139,10 @@ func (client *Client) doJSON(method string, path string, payload any) (Authentic
 		}
 		return AuthenticationResponse{}, APIError{StatusCode: response.StatusCode, Message: message}
 	}
+
 	return result, nil
+}
+
+func backoffDuration(attempt int) time.Duration {
+	return time.Duration(attempt) * baseBackoff
 }
