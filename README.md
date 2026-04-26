@@ -175,6 +175,9 @@ AUSF/
 │   └── src/
 │       ├── main.cpp
 │       └── pfcp_handler.cpp
+├── mock-network-functions/
+│   ├── nrf_server.py
+│   └── udm_server.py
 ├── docker-compose.yml
 ├── Makefile
 └── README.md
@@ -186,6 +189,16 @@ AUSF/
 - `control-plane/` owns subscriber lookup, authentication vectors, EAP/AKA branching, and internal auth context state.
 - `microservices/` is the northbound AUSF SBI surface and now acts as an adapter over the Java control-plane.
 - `automation/` is the place for smoke tests, API validation, CI helpers, and deployment scripts.
+
+The control-plane now supports a pluggable UDM southbound integration mode:
+
+- `mock` mode uses the local file-backed subscriber store and development vector generation.
+- `http` mode calls an external UDM-style endpoint and expects pre-generated authentication data.
+
+For southbound integration testing, the repository also provides lightweight mock network functions:
+
+- `mock-udm` exposes a development `Nudm_UEAuthentication`-style HTTP endpoint.
+- `mock-nrf` exposes a development `Nnrf_NFDiscovery`-style HTTP endpoint that returns the `mock-udm` location.
 
 ## Local development
 
@@ -256,18 +269,74 @@ Services:
 
 - Go AUSF service: `http://localhost:8080`
 - Java control-plane service: `http://localhost:8081`
+- Mock UDM service: `http://localhost:8090`
+- Mock NRF service: `http://localhost:8091`
 
 Important runtime variables:
 
 - `CONTROL_PLANE_BASE_URL` tells Go where the Java control-plane lives.
 - `AUSF_SUBSCRIBER_STORE` tells Java where the persistent subscriber JSON file lives.
+- `AUSF_UDM_MODE` selects the UDM integration mode: `mock` or `http`.
+- `AUSF_UDM_BASE_URL` points the control-plane directly at an external UDM when `AUSF_UDM_MODE=http`.
+- `AUSF_NNRF_BASE_URL` points the control-plane at an external NRF discovery service when the UDM location should be resolved dynamically.
+
+When `AUSF_NNRF_BASE_URL` is set and `AUSF_UDM_BASE_URL` is empty, the control-plane first calls:
+
+- `GET /nnrf-disc/v1/nf-instances?target-nf-type=UDM&requester-nf-type=AUSF`
+
+Expected NRF response body:
+
+```json
+{
+  "nfInstances": [
+    {
+      "services": [
+        {
+          "serviceName": "nudm-ueau",
+          "apiPrefix": "http://mock-udm:8090"
+        }
+      ]
+    }
+  ]
+}
+```
+
+When `AUSF_UDM_MODE=http`, the control-plane calls:
+
+- `POST /nudm-ueau/v1/{supi}/security-information/generate-auth-data`
+
+Expected request body:
+
+```json
+{
+  "servingNetworkName": "5G:mnc001.mcc001.3gppnetwork.org",
+  "authType": "5G_AKA"
+}
+```
+
+Expected response body:
+
+```json
+{
+  "supi": "imsi-001010000000001",
+  "authType": "5G_AKA",
+  "servingNetworkName": "5G:mnc001.mcc001.3gppnetwork.org",
+  "rand": "...",
+  "autn": "...",
+  "xresStar": "...",
+  "hxresStar": "...",
+  "kausf": "...",
+  "eapChallenge": null
+}
+```
 
 ## What is still missing
 
 This workspace is intentionally a foundation. The following are not implemented yet:
 
 - Real 3GPP-compliant Milenage or TUAK algorithms.
-- Real Nudm / Nnrf / Namf interactions.
+- Real Nnrf / Namf interactions.
+- Production-grade Nudm interoperability beyond the current pluggable mock/http development contract.
 - Durable database-backed storage instead of JSON file storage.
 - Production-grade security, TLS, OAuth2, and SBI authorization.
 - Full 5G AKA and EAP-AKA' state machines.
@@ -281,9 +350,10 @@ Validated in the current environment:
 - C++ networking layer builds and its sample executable runs.
 - Python automation unit tests pass.
 - IDE diagnostics for the edited Go and Java sources are clean.
+- Docker Compose stack with `mock-nrf` and `mock-udm` starts successfully.
+- `python automation/scripts/smoke_test_http_udm.py` passes against the HTTP UDM mode.
 
 Not fully validated in the current environment:
 
 - Go build could not be executed here because `go` is not installed on `PATH`.
 - Java Maven build could not be executed here because `mvn` is not installed on `PATH`.
-- Docker Compose stack was not started here.

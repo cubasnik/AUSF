@@ -81,4 +81,15 @@ class AuthenticationManagerTest {
 
         assertFalse(result.getSuccess());
     }
+
+    @Test
+    void shouldHonorServingNetworkNameOverrideWhenInitiatingAuthentication() {
+        AuthenticationResponse challenge = authenticationManager.initiateAuthentication(
+            "imsi-001010000000001",
+            "5G:mnc999.mcc999.3gppnetwork.org",
+            "5G_AKA"
+        );
+
+        assertEquals("5G:mnc999.mcc999.3gppnetwork.org", challenge.getServingNetworkName());
+    }
 }

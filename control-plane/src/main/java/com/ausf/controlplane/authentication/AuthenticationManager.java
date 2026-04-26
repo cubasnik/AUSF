@@ -1,8 +1,8 @@
 package com.ausf.controlplane.authentication;
 
-import com.ausf.controlplane.subscriber.SubscriberProfile;
 import com.ausf.controlplane.udm.AuthenticationVector;
-import com.ausf.controlplane.udm.UdmService;
+import com.ausf.controlplane.udm.UdmAuthenticationData;
+import com.ausf.controlplane.udm.UdmClient;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
@@ -12,24 +12,24 @@ import org.springframework.stereotype.Service;
 public class AuthenticationManager {
     private final Map<String, AuthenticationContext> authContexts = new ConcurrentHashMap<>();
     private final CryptographyService cryptographyService;
-    private final UdmService udmService;
+    private final UdmClient udmClient;
 
-    public AuthenticationManager(CryptographyService cryptographyService, UdmService udmService) {
+    public AuthenticationManager(CryptographyService cryptographyService, UdmClient udmClient) {
         this.cryptographyService = cryptographyService;
-        this.udmService = udmService;
+        this.udmClient = udmClient;
     }
 
     public AuthenticationResponse initiateAuthentication(String supi, String servingNetworkName, String authType) {
-        Optional<SubscriberProfile> subscriber = udmService.findSubscriber(supi);
-        if (subscriber.isEmpty()) {
+        Optional<UdmAuthenticationData> udmAuthenticationData = udmClient.getAuthenticationData(supi, servingNetworkName, authType);
+        if (udmAuthenticationData.isEmpty()) {
             return AuthenticationResponse.failure("subscriber not found in UDM storage");
         }
 
-        SubscriberProfile profile = subscriber.get();
-        AuthenticationVector vector = udmService.generateVector(profile);
+        UdmAuthenticationData authenticationData = udmAuthenticationData.get();
+        AuthenticationVector vector = authenticationData.getAuthenticationVector();
         AuthenticationContext context = new AuthenticationContext(supi);
-        context.setAuthType(vector.getAuthType());
-        context.setServingNetworkName(servingNetworkName != null ? servingNetworkName : profile.getServingNetworkName());
+        context.setAuthType(authenticationData.getAuthType());
+        context.setServingNetworkName(authenticationData.getServingNetworkName());
         context.setRand(vector.getRand());
         context.setAutn(vector.getAutn());
         context.setHxresStar(vector.getHxresStar());
