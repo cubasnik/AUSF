@@ -260,6 +260,7 @@ python scripts/smoke_test_http_udm_eap.py
 python scripts/smoke_test_http_udm_missing_context.py
 python scripts/smoke_test_http_udm_missing_subscriber.py
 python scripts/smoke_test_http_udm_authentication_rejected.py
+python scripts/smoke_test_http_udm_eap_authentication_rejected.py
 ```
 
 The HTTP UDM smoke coverage is split by auth mode:
@@ -269,6 +270,7 @@ The HTTP UDM smoke coverage is split by auth mode:
 - `python automation/scripts/smoke_test_http_udm_missing_context.py` validates the negative confirm path, asserting `404` with `cause=CONTEXT_NOT_FOUND` and no Namf callback for a missing `authCtxId`.
 - `python automation/scripts/smoke_test_http_udm_missing_subscriber.py` validates the negative initiate path, asserting `404` with `cause=SUBSCRIBER_NOT_FOUND` and no Namf callback for an unknown SUPI.
 - `python automation/scripts/smoke_test_http_udm_authentication_rejected.py` validates the negative confirm path, asserting `401` with `cause=AUTHENTICATION_REJECTED` and no Namf callback for an invalid `resStar`.
+- `python automation/scripts/smoke_test_http_udm_eap_authentication_rejected.py` validates the negative EAP confirm path, asserting `401` with `cause=AUTHENTICATION_REJECTED` and no Namf callback for an invalid `eapPayload`.
 
 ## Root orchestration
 
@@ -410,6 +412,8 @@ Validated in the current environment:
 - `python automation/scripts/smoke_test_http_udm_eap.py` passes against the HTTP UDM EAP mode.
 - `python automation/scripts/smoke_test_http_udm_missing_context.py` validates the missing-context confirmation path in the same compose environment.
 - `python automation/scripts/smoke_test_http_udm_missing_subscriber.py` validates the missing-subscriber initiate path in the same compose environment.
+- `python automation/scripts/smoke_test_http_udm_authentication_rejected.py` validates the authentication-rejected 5G AKA confirmation path in the same compose environment.
+- `python automation/scripts/smoke_test_http_udm_eap_authentication_rejected.py` validates the authentication-rejected EAP confirmation path in the same compose environment.
 - `python automation/scripts/smoke_test_http_udm_authentication_rejected.py` validates the authentication-rejected confirmation path in the same compose environment.
 - The HTTP UDM smoke suite validates mock Namf southbound notification paths for both `5G_AKA` and `EAP_AKA_PRIME`, and confirms the negative create/confirm paths do not emit stray callbacks.
 
