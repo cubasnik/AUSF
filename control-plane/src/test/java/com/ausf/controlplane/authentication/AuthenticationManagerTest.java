@@ -80,6 +80,7 @@ class AuthenticationManagerTest {
         AuthenticationResponse result = authenticationManager.verifyAuthenticationResponse("missing", "deadbeef", null);
 
         assertFalse(result.getSuccess());
+        assertEquals("CONTEXT_NOT_FOUND", result.getErrorCode());
     }
 
     @Test

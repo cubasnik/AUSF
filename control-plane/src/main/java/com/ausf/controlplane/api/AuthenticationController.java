@@ -45,6 +45,9 @@ public class AuthenticationController {
             request.getEapPayload()
         );
         if (!response.getSuccess()) {
+            if ("CONTEXT_NOT_FOUND".equals(response.getErrorCode())) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
+            }
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(response);
         }
         return ResponseEntity.ok(response);

@@ -11,6 +11,7 @@ public class AuthenticationResponse {
     private final String eapChallenge;
     private final String kseaf;
     private final String message;
+    private final String errorCode;
 
     private AuthenticationResponse(
         boolean success,
@@ -22,7 +23,8 @@ public class AuthenticationResponse {
         String hxresStar,
         String eapChallenge,
         String kseaf,
-        String message
+        String message,
+        String errorCode
     ) {
         this.success = success;
         this.supi = supi;
@@ -34,6 +36,7 @@ public class AuthenticationResponse {
         this.eapChallenge = eapChallenge;
         this.kseaf = kseaf;
         this.message = message;
+        this.errorCode = errorCode;
     }
 
     public static AuthenticationResponse challenge(
@@ -45,15 +48,15 @@ public class AuthenticationResponse {
         String hxresStar,
         String eapChallenge
     ) {
-        return new AuthenticationResponse(true, supi, authType, servingNetworkName, rand, autn, hxresStar, eapChallenge, null, "challenge generated");
+        return new AuthenticationResponse(true, supi, authType, servingNetworkName, rand, autn, hxresStar, eapChallenge, null, "challenge generated", null);
     }
 
     public static AuthenticationResponse success(String supi, String authType, String kseaf) {
-        return new AuthenticationResponse(true, supi, authType, null, null, null, null, null, kseaf, "authentication successful");
+        return new AuthenticationResponse(true, supi, authType, null, null, null, null, null, kseaf, "authentication successful", null);
     }
 
-    public static AuthenticationResponse failure(String message) {
-        return new AuthenticationResponse(false, null, null, null, null, null, null, null, null, message);
+    public static AuthenticationResponse failure(String message, String errorCode) {
+        return new AuthenticationResponse(false, null, null, null, null, null, null, null, null, message, errorCode);
     }
 
     public boolean getSuccess() {
@@ -94,5 +97,9 @@ public class AuthenticationResponse {
 
     public String getMessage() {
         return message;
+    }
+
+    public String getErrorCode() {
+        return errorCode;
     }
 }

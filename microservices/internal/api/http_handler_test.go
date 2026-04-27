@@ -159,3 +159,60 @@ func TestEapSessionShouldRejectResStar(t *testing.T) {
 		t.Fatalf("cause = %s, want INVALID_CONFIRMATION_PAYLOAD", problem.Cause)
 	}
 }
+
+type failingConfirmControlPlaneClient struct{}
+
+func (failingConfirmControlPlaneClient) Initiate(request controlplane.AuthenticationRequest) (controlplane.AuthenticationResponse, error) {
+	return controlplane.AuthenticationResponse{
+		Success:            true,
+		SUPI:               request.SUPI,
+		AuthType:           request.AuthType,
+		ServingNetworkName: request.ServingNetworkName,
+		RAND:               "rand",
+		AUTN:               "autn",
+		HXRESStar:          "hxres",
+	}, nil
+}
+
+func (failingConfirmControlPlaneClient) Confirm(string, controlplane.AuthenticationRequest) (controlplane.AuthenticationResponse, error) {
+	return controlplane.AuthenticationResponse{}, controlplane.APIError{
+		StatusCode: http.StatusNotFound,
+		Message:    "authentication context missing or expired",
+		ErrorCode:  "CONTEXT_NOT_FOUND",
+	}
+}
+
+func (failingConfirmControlPlaneClient) Context(string) (controlplane.AuthenticationResponse, error) {
+	return controlplane.AuthenticationResponse{}, nil
+}
+
+func TestFiveGAkaConfirmationShouldPropagateControlPlaneNotFoundCause(t *testing.T) {
+	authService := service.NewAuthService(failingConfirmControlPlaneClient{}, nil)
+	handler := NewHandler(authService).Routes()
+
+	_, err := authService.CreateUEAuthentication("imsi-250010000000001", "5G:mnc001.mcc001.3gppnetwork.org", "5G_AKA", "")
+	if err != nil {
+		t.Fatalf("CreateUEAuthentication() error = %v", err)
+	}
+
+	request := httptest.NewRequest(http.MethodPost, "/nausf-auth/v1/ue-authentications/auth-1/5g-aka-confirmation", bytes.NewReader([]byte(`{"resStar":"deadbeef"}`)))
+	request.Header.Set("Content-Type", "application/json")
+	response := httptest.NewRecorder()
+
+	handler.ServeHTTP(response, request)
+
+	if response.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusNotFound)
+	}
+
+	var problem ProblemDetails
+	if err := json.Unmarshal(response.Body.Bytes(), &problem); err != nil {
+		t.Fatalf("Unmarshal() error = %v", err)
+	}
+	if problem.Cause != "CONTEXT_NOT_FOUND" {
+		t.Fatalf("cause = %s, want CONTEXT_NOT_FOUND", problem.Cause)
+	}
+	if problem.Detail != "authentication context missing or expired" {
+		t.Fatalf("detail = %s, want authentication context missing or expired", problem.Detail)
+	}
+}

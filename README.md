@@ -246,7 +246,14 @@ go run ./cmd/ausf
 cd automation
 python -m unittest discover -s tests
 python scripts/smoke_test.py
+python scripts/smoke_test_http_udm.py
+python scripts/smoke_test_http_udm_eap.py
 ```
+
+The HTTP UDM smoke coverage is split by auth mode:
+
+- `python automation/scripts/smoke_test_http_udm.py` validates the `5G_AKA` flow and Namf callback path.
+- `python automation/scripts/smoke_test_http_udm_eap.py` validates the `EAP_AKA_PRIME` flow through the dedicated `eap-session` confirmation subresource and the same Namf callback path.
 
 ## Root orchestration
 
@@ -379,13 +386,16 @@ This workspace is intentionally a foundation. The following are not implemented 
 Validated in the current environment:
 
 - C++ networking layer builds and its sample executable runs.
+- Focused Go tests pass in a containerized Go toolchain, including `./internal/api`, `./internal/controlplane`, `./internal/namf`, and `./internal/service`.
+- Focused Java tests pass in a containerized Java/Maven toolchain, including `AuthenticationManagerTest`, `AuthenticationControllerTest`, `NnrfClientTest`, and `HttpUdmClientTest`.
 - Python automation unit tests pass.
 - IDE diagnostics for the edited Go and Java sources are clean.
 - Docker Compose stack with `mock-nrf` and `mock-udm` starts successfully.
 - `python automation/scripts/smoke_test_http_udm.py` passes against the HTTP UDM mode.
-- The HTTP UDM smoke now also validates a mock Namf southbound notification path.
+- `python automation/scripts/smoke_test_http_udm_eap.py` passes against the HTTP UDM EAP mode.
+- The HTTP UDM smoke suite validates mock Namf southbound notification paths for both `5G_AKA` and `EAP_AKA_PRIME`.
 
 Not fully validated in the current environment:
 
-- Go build could not be executed here because `go` is not installed on `PATH`.
-- Java Maven build could not be executed here because `mvn` is not installed on `PATH`.
+- Full end-to-end validation of every branch and failure mode has not been run.
+- Host-native `go` and `mvn` commands were not used directly; validation was performed through containerized toolchains.

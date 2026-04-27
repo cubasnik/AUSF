@@ -66,3 +66,38 @@ func TestClientShouldNotRetryClientFailure(t *testing.T) {
 	}
 	_ = fmt.Sprintf("%v", apiErr)
 }
+
+func TestConfirmShouldReturnNotFoundWhenControlPlaneContextIsMissing(t *testing.T) {
+	var requests int32
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		atomic.AddInt32(&requests, 1)
+		writer.WriteHeader(http.StatusNotFound)
+		_, _ = writer.Write([]byte(`{"message":"authentication context missing or expired","errorCode":"CONTEXT_NOT_FOUND"}`))
+	}))
+	defer server.Close()
+
+	client := NewClient(server.URL)
+
+	_, err := client.Confirm("imsi-250010000000001", AuthenticationRequest{ResStar: "deadbeef"})
+	if err == nil {
+		t.Fatal("Confirm() error = nil, want error")
+	}
+
+	apiErr, ok := err.(APIError)
+	if !ok {
+		t.Fatalf("error type = %T, want APIError", err)
+	}
+	if apiErr.StatusCode != http.StatusNotFound {
+		t.Fatalf("status code = %d, want %d", apiErr.StatusCode, http.StatusNotFound)
+	}
+	if apiErr.Message != "authentication context missing or expired" {
+		t.Fatalf("message = %s, want authentication context missing or expired", apiErr.Message)
+	}
+	if apiErr.ErrorCode != "CONTEXT_NOT_FOUND" {
+		t.Fatalf("error code = %s, want CONTEXT_NOT_FOUND", apiErr.ErrorCode)
+	}
+	if got := atomic.LoadInt32(&requests); got != 1 {
+		t.Fatalf("requests = %d, want 1", got)
+	}
+	_ = fmt.Sprintf("%v", apiErr)
+}

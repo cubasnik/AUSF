@@ -200,7 +200,11 @@ func (service *AuthService) Delete(authCtxID string) bool {
 
 func mapControlPlaneError(err error, fallbackMessage string) error {
 	if apiErr, ok := err.(controlplane.APIError); ok {
-		return APIError{StatusCode: apiErr.StatusCode, Message: apiErr.Message, Cause: fallbackMessage}
+		cause := fallbackMessage
+		if apiErr.ErrorCode != "" {
+			cause = apiErr.ErrorCode
+		}
+		return APIError{StatusCode: apiErr.StatusCode, Message: apiErr.Message, Cause: cause}
 	}
 	return APIError{StatusCode: 502, Message: fallbackMessage + ": " + err.Error(), Cause: "CONTROL_PLANE_UNAVAILABLE"}
 }

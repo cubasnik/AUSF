@@ -39,11 +39,13 @@ type AuthenticationResponse struct {
 	EapChallenge       string `json:"eapChallenge"`
 	KSEAF              string `json:"kseaf"`
 	Message            string `json:"message"`
+	ErrorCode          string `json:"errorCode"`
 }
 
 type APIError struct {
 	StatusCode int
 	Message    string
+	ErrorCode  string
 }
 
 func (error APIError) Error() string {
@@ -137,7 +139,7 @@ func decodeResponse(response *http.Response) (AuthenticationResponse, error) {
 		if message == "" {
 			message = fmt.Sprintf("control-plane request failed with status %d", response.StatusCode)
 		}
-		return AuthenticationResponse{}, APIError{StatusCode: response.StatusCode, Message: message}
+		return AuthenticationResponse{}, APIError{StatusCode: response.StatusCode, Message: message, ErrorCode: result.ErrorCode}
 	}
 
 	return result, nil
