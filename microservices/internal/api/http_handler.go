@@ -100,9 +100,10 @@ func (handler Handler) authContextRoutes(writer http.ResponseWriter, request *ht
 }
 
 func (handler Handler) getContext(writer http.ResponseWriter, authCtxID string) {
-	context, ok := handler.authService.Lookup(authCtxID)
-	if !ok {
-		writeProblem(writer, http.StatusNotFound, "Context not found", "authentication context not found", "CONTEXT_NOT_FOUND", "/nausf-auth/v1/ue-authentications/"+authCtxID)
+	context, err := handler.authService.Lookup(authCtxID)
+	if err != nil {
+		apiErr := err.(service.APIError)
+		writeProblem(writer, apiErr.StatusCode, "Context not found", apiErr.Message, apiErr.Cause, "/nausf-auth/v1/ue-authentications/"+authCtxID)
 		return
 	}
 	writeJSON(writer, http.StatusOK, context)
@@ -142,8 +143,9 @@ func (handler Handler) confirm(writer http.ResponseWriter, request *http.Request
 }
 
 func (handler Handler) deleteContext(writer http.ResponseWriter, authCtxID string) {
-	if !handler.authService.Delete(authCtxID) {
-		writeProblem(writer, http.StatusNotFound, "Context not found", "authentication context not found", "CONTEXT_NOT_FOUND", "/nausf-auth/v1/ue-authentications/"+authCtxID)
+	if err := handler.authService.Delete(authCtxID); err != nil {
+		apiErr := err.(service.APIError)
+		writeProblem(writer, apiErr.StatusCode, "Context not found", apiErr.Message, apiErr.Cause, "/nausf-auth/v1/ue-authentications/"+authCtxID)
 		return
 	}
 	writer.WriteHeader(http.StatusNoContent)

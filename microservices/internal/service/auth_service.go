@@ -99,7 +99,7 @@ func (service *AuthService) CreateUEAuthentication(supi string, servingNetworkNa
 		AuthType:           authType,
 	})
 	if err != nil {
-		return AuthContext{}, mapControlPlaneError(err, "control-plane initiate failed")
+		return AuthContext{}, mapInitiateError(err)
 	}
 
 	service.serial++
@@ -110,26 +110,11 @@ func (service *AuthService) CreateUEAuthentication(supi string, servingNetworkNa
 		ServingNetworkName: response.ServingNetworkName,
 		AuthType:           response.AuthType,
 		NotificationURI:    notificationURI,
-		AuthData: AuthData{
-			RAND:      response.RAND,
-			AUTN:      response.AUTN,
-			HXRESStar: response.HXRESStar,
-		},
-		Status: "CHALLENGE_SENT",
-		Links: AuthLinks{},
-		CreatedAt: time.Now().UTC(),
+		Status:             authStatusChallengeSent,
+		Links:              AuthLinks{},
+		CreatedAt:          time.Now().UTC(),
 	}
-	if context.AuthType == "EAP_AKA_PRIME" {
-		context.EapSession = &EapSession{
-			Method:    "EAP-AKA'",
-			Payload:   response.EapChallenge,
-			SessionID: authCtxID,
-		}
-		context.AuthData = AuthData{}
-		context.Links.EapSession = &Link{Href: "/nausf-auth/v1/ue-authentications/" + authCtxID + "/eap-session"}
-	} else {
-		context.Links.FiveGAka = &Link{Href: "/nausf-auth/v1/ue-authentications/" + authCtxID + "/5g-aka-confirmation"}
-	}
+	context = initializeAuthContext(context, response)
 
 	service.contexts[authCtxID] = context
 	return context, nil
@@ -139,9 +124,9 @@ func (service *AuthService) Confirm(authCtxID string, resStar string, eapPayload
 	service.mu.Lock()
 	defer service.mu.Unlock()
 
-	context, ok := service.contexts[authCtxID]
-	if !ok {
-		return ConfirmationResult{}, APIError{StatusCode: 404, Message: "authentication context not found", Cause: "CONTEXT_NOT_FOUND"}
+	context, err := service.lookupContextLocked(authCtxID)
+	if err != nil {
+		return ConfirmationResult{}, err
 	}
 
 	response, err := service.controlPlaneClient.Confirm(context.SUPI, controlplane.AuthenticationRequest{
@@ -149,11 +134,11 @@ func (service *AuthService) Confirm(authCtxID string, resStar string, eapPayload
 		EapPayload: eapPayload,
 	})
 	if err != nil {
-		return ConfirmationResult{}, mapControlPlaneError(err, "control-plane confirmation failed")
+		return ConfirmationResult{}, mapConfirmError(err)
 	}
 
 	context.KSEAF = response.KSEAF
-	context.Status = "AUTHENTICATED"
+	context.Status = authStatusAuthenticated
 	service.contexts[authCtxID] = context
 
 	if service.namfClient != nil {
@@ -179,32 +164,60 @@ func (service *AuthService) Confirm(authCtxID string, resStar string, eapPayload
 	}, nil
 }
 
-func (service *AuthService) Lookup(authCtxID string) (AuthContext, bool) {
+func (service *AuthService) Lookup(authCtxID string) (AuthContext, error) {
 	service.mu.RLock()
 	defer service.mu.RUnlock()
 
-	context, ok := service.contexts[authCtxID]
-	return context, ok
+	return service.lookupContextLocked(authCtxID)
 }
 
-func (service *AuthService) Delete(authCtxID string) bool {
+func (service *AuthService) Delete(authCtxID string) error {
 	service.mu.Lock()
 	defer service.mu.Unlock()
 
-	if _, ok := service.contexts[authCtxID]; !ok {
-		return false
+	if _, err := service.lookupContextLocked(authCtxID); err != nil {
+		return err
 	}
 	delete(service.contexts, authCtxID)
-	return true
+	return nil
 }
 
-func mapControlPlaneError(err error, fallbackMessage string) error {
-	if apiErr, ok := err.(controlplane.APIError); ok {
-		cause := fallbackMessage
-		if apiErr.ErrorCode != "" {
-			cause = apiErr.ErrorCode
-		}
-		return APIError{StatusCode: apiErr.StatusCode, Message: apiErr.Message, Cause: cause}
+func (service *AuthService) lookupContextLocked(authCtxID string) (AuthContext, error) {
+	context, ok := service.contexts[authCtxID]
+	if !ok {
+		return AuthContext{}, contextNotFoundError()
 	}
-	return APIError{StatusCode: 502, Message: fallbackMessage + ": " + err.Error(), Cause: "CONTROL_PLANE_UNAVAILABLE"}
+	return context, nil
+}
+
+func initializeAuthContext(context AuthContext, response controlplane.AuthenticationResponse) AuthContext {
+	switch context.AuthType {
+	case authTypeEapAkaPrime:
+		return initializeEapAkaPrimeContext(context, response.EapChallenge)
+	case authTypeFiveGAka:
+		fallthrough
+	default:
+		return initializeFiveGAkaContext(context, response)
+	}
+}
+
+func initializeFiveGAkaContext(context AuthContext, response controlplane.AuthenticationResponse) AuthContext {
+	context.AuthData = AuthData{
+		RAND:      response.RAND,
+		AUTN:      response.AUTN,
+		HXRESStar: response.HXRESStar,
+	}
+	context.Links.FiveGAka = &Link{Href: "/nausf-auth/v1/ue-authentications/" + context.AuthCtxID + "/5g-aka-confirmation"}
+	return context
+}
+
+func initializeEapAkaPrimeContext(context AuthContext, eapChallenge string) AuthContext {
+	context.AuthData = AuthData{}
+	context.EapSession = &EapSession{
+		Method:    "EAP-AKA'",
+		Payload:   eapChallenge,
+		SessionID: context.AuthCtxID,
+	}
+	context.Links.EapSession = &Link{Href: "/nausf-auth/v1/ue-authentications/" + context.AuthCtxID + "/eap-session"}
+	return context
 }

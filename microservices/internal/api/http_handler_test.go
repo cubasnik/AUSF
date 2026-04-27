@@ -118,6 +118,52 @@ func TestAuthContextRoutesShouldAcceptEapSessionSubresource(t *testing.T) {
 	}
 }
 
+func TestGetAuthContextShouldReturnContextNotFoundCause(t *testing.T) {
+	handler := NewHandler(service.NewAuthService(stubControlPlaneClient{}, nil)).Routes()
+	request := httptest.NewRequest(http.MethodGet, "/nausf-auth/v1/ue-authentications/missing", nil)
+	response := httptest.NewRecorder()
+
+	handler.ServeHTTP(response, request)
+
+	if response.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusNotFound)
+	}
+
+	var problem ProblemDetails
+	if err := json.Unmarshal(response.Body.Bytes(), &problem); err != nil {
+		t.Fatalf("Unmarshal() error = %v", err)
+	}
+	if problem.Cause != "CONTEXT_NOT_FOUND" {
+		t.Fatalf("cause = %s, want CONTEXT_NOT_FOUND", problem.Cause)
+	}
+	if problem.Detail != "authentication context not found" {
+		t.Fatalf("detail = %s, want authentication context not found", problem.Detail)
+	}
+}
+
+func TestDeleteAuthContextShouldReturnContextNotFoundCause(t *testing.T) {
+	handler := NewHandler(service.NewAuthService(stubControlPlaneClient{}, nil)).Routes()
+	request := httptest.NewRequest(http.MethodDelete, "/nausf-auth/v1/ue-authentications/missing", nil)
+	response := httptest.NewRecorder()
+
+	handler.ServeHTTP(response, request)
+
+	if response.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusNotFound)
+	}
+
+	var problem ProblemDetails
+	if err := json.Unmarshal(response.Body.Bytes(), &problem); err != nil {
+		t.Fatalf("Unmarshal() error = %v", err)
+	}
+	if problem.Cause != "CONTEXT_NOT_FOUND" {
+		t.Fatalf("cause = %s, want CONTEXT_NOT_FOUND", problem.Cause)
+	}
+	if problem.Detail != "authentication context not found" {
+		t.Fatalf("detail = %s, want authentication context not found", problem.Detail)
+	}
+}
+
 func TestFiveGAkaConfirmationShouldRejectEapPayload(t *testing.T) {
 	handler := NewHandler(service.NewAuthService(stubControlPlaneClient{}, nil)).Routes()
 	request := httptest.NewRequest(http.MethodPost, "/nausf-auth/v1/ue-authentications/auth-1/5g-aka-confirmation", bytes.NewReader([]byte(`{"eapPayload":"EAP-Response/AKA'-Challenge token"}`)))
