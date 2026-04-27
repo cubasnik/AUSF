@@ -28,7 +28,7 @@ class HttpUdmClientTest {
         NnrfClient nnrfClient = mock(NnrfClient.class);
         HttpUdmClient client = new HttpUdmClient(builder, nnrfClient, "http://mock-udm:8090/");
 
-        server.expect(requestTo("http://mock-udm:8090/nudm-ueau/v1/imsi-001/security-information/generate-auth-data"))
+        server.expect(requestTo("http://mock-udm:8090/nudm-ueau/v1/imsi-250010000000001/security-information/generate-auth-data"))
             .andExpect(method(POST))
             .andExpect(content().json("""
                 {
@@ -39,7 +39,7 @@ class HttpUdmClientTest {
             .andRespond(withSuccess(
                 """
                 {
-                  "supi": "imsi-001",
+                  "supi": "imsi-250010000000001",
                   "authType": "5G_AKA",
                   "servingNetworkName": "5G:mnc001.mcc001.3gppnetwork.org",
                   "rand": "rand",
@@ -54,12 +54,12 @@ class HttpUdmClientTest {
             ));
 
         Optional<UdmAuthenticationData> result = client.getAuthenticationData(
-            "imsi-001",
+            "imsi-250010000000001",
             "5G:mnc001.mcc001.3gppnetwork.org",
             "5G_AKA"
         );
 
-        assertEquals("imsi-001", result.orElseThrow().getSupi());
+        assertEquals("imsi-250010000000001", result.orElseThrow().getSupi());
         assertEquals("kausf", result.orElseThrow().getAuthenticationVector().getKausf());
         verifyNoInteractions(nnrfClient);
         server.verify();
@@ -73,12 +73,12 @@ class HttpUdmClientTest {
         when(nnrfClient.resolveUdmBaseUrl()).thenReturn(Optional.of("http://mock-udm:8090"));
         HttpUdmClient client = new HttpUdmClient(builder, nnrfClient, "");
 
-        server.expect(requestTo("http://mock-udm:8090/nudm-ueau/v1/imsi-002/security-information/generate-auth-data"))
+        server.expect(requestTo("http://mock-udm:8090/nudm-ueau/v1/imsi-250010000000002/security-information/generate-auth-data"))
             .andExpect(method(POST))
             .andRespond(withSuccess(
                 """
                 {
-                  "supi": "imsi-002",
+                  "supi": "imsi-250010000000002",
                   "authType": "EAP_AKA_PRIME",
                   "servingNetworkName": "5G:mnc001.mcc001.3gppnetwork.org",
                   "rand": "rand2",
@@ -93,7 +93,7 @@ class HttpUdmClientTest {
             ));
 
         Optional<UdmAuthenticationData> result = client.getAuthenticationData(
-            "imsi-002",
+            "imsi-250010000000002",
             "5G:mnc001.mcc001.3gppnetwork.org",
             "EAP_AKA_PRIME"
         );
@@ -109,15 +109,15 @@ class HttpUdmClientTest {
         NnrfClient nnrfClient = mock(NnrfClient.class);
         HttpUdmClient client = new HttpUdmClient(builder, nnrfClient, "http://mock-udm:8090");
 
-        server.expect(requestTo("http://mock-udm:8090/nudm-ueau/v1/imsi-001/security-information/generate-auth-data"))
+        server.expect(requestTo("http://mock-udm:8090/nudm-ueau/v1/imsi-250010000000001/security-information/generate-auth-data"))
             .andExpect(method(POST))
             .andRespond(withServerError());
-        server.expect(requestTo("http://mock-udm:8090/nudm-ueau/v1/imsi-001/security-information/generate-auth-data"))
+        server.expect(requestTo("http://mock-udm:8090/nudm-ueau/v1/imsi-250010000000001/security-information/generate-auth-data"))
             .andExpect(method(POST))
             .andRespond(withSuccess(
                 """
                 {
-                  "supi": "imsi-001",
+                  "supi": "imsi-250010000000001",
                   "authType": "5G_AKA",
                   "servingNetworkName": "5G:mnc001.mcc001.3gppnetwork.org",
                   "rand": "rand",
@@ -132,7 +132,7 @@ class HttpUdmClientTest {
             ));
 
         Optional<UdmAuthenticationData> result = client.getAuthenticationData(
-            "imsi-001",
+            "imsi-250010000000001",
             "5G:mnc001.mcc001.3gppnetwork.org",
             "5G_AKA"
         );
@@ -163,7 +163,7 @@ class HttpUdmClientTest {
         HttpUdmClient client = new HttpUdmClient(RestClient.builder(), nnrfClient, "");
 
         assertThrows(IllegalStateException.class, () ->
-            client.getAuthenticationData("imsi-003", "5G:mnc001.mcc001.3gppnetwork.org", "5G_AKA")
+            client.getAuthenticationData("imsi-250010000000003", "5G:mnc001.mcc001.3gppnetwork.org", "5G_AKA")
         );
     }
 }

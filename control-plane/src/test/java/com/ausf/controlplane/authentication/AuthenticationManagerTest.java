@@ -14,7 +14,7 @@ import org.junit.jupiter.api.Test;
 class AuthenticationManagerTest {
     private final CryptographyService cryptographyService = new CryptographyService();
     private final SubscriberRepository subscriberRepository = supi -> {
-        if ("imsi-001010000000001".equals(supi)) {
+        if ("imsi-250010000000001".equals(supi)) {
             SubscriberProfile profile = new SubscriberProfile();
             profile.setSupi(supi);
             profile.setAuthMethod("5G_AKA");
@@ -25,7 +25,7 @@ class AuthenticationManagerTest {
             profile.setRoutingIndicator("0001");
             return Optional.of(profile);
         }
-        if ("imsi-001010000000002".equals(supi)) {
+        if ("imsi-250010000000002".equals(supi)) {
             SubscriberProfile profile = new SubscriberProfile();
             profile.setSupi(supi);
             profile.setAuthMethod("EAP_AKA_PRIME");
@@ -44,29 +44,29 @@ class AuthenticationManagerTest {
     @Test
     void shouldAuthenticateKnownContext() {
         authenticationManager.initiateAuthentication(
-            "imsi-001010000000001",
+            "imsi-250010000000001",
             "5G:mnc001.mcc001.3gppnetwork.org",
             "5G_AKA"
         );
-        String resStar = authenticationManager.getContext("imsi-001010000000001").getXresStar();
+        String resStar = authenticationManager.getContext("imsi-250010000000001").getXresStar();
 
-        AuthenticationResponse result = authenticationManager.verifyAuthenticationResponse("imsi-001010000000001", resStar, null);
+        AuthenticationResponse result = authenticationManager.verifyAuthenticationResponse("imsi-250010000000001", resStar, null);
 
         assertTrue(result.getSuccess());
         assertNotNull(result.getKseaf());
-        assertEquals("AUTHENTICATED", authenticationManager.getContext("imsi-001010000000001").getStatus());
+        assertEquals("AUTHENTICATED", authenticationManager.getContext("imsi-250010000000001").getStatus());
     }
 
     @Test
     void shouldAuthenticateEapAkaPrimeContext() {
         AuthenticationResponse challenge = authenticationManager.initiateAuthentication(
-            "imsi-001010000000002",
+            "imsi-250010000000002",
             "5G:mnc001.mcc001.3gppnetwork.org",
             "EAP_AKA_PRIME"
         );
 
         AuthenticationResponse result = authenticationManager.verifyAuthenticationResponse(
-            "imsi-001010000000002",
+            "imsi-250010000000002",
             null,
             challenge.getEapChallenge().replace("Request", "Response")
         );
@@ -85,7 +85,7 @@ class AuthenticationManagerTest {
     @Test
     void shouldHonorServingNetworkNameOverrideWhenInitiatingAuthentication() {
         AuthenticationResponse challenge = authenticationManager.initiateAuthentication(
-            "imsi-001010000000001",
+            "imsi-250010000000001",
             "5G:mnc999.mcc999.3gppnetwork.org",
             "5G_AKA"
         );

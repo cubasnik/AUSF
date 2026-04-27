@@ -19,13 +19,13 @@ func TestClientShouldRetryTransientServerFailure(t *testing.T) {
 		}
 
 		writer.Header().Set("Content-Type", "application/json")
-		_, _ = writer.Write([]byte(`{"success":true,"supi":"imsi-001","authType":"5G_AKA","servingNetworkName":"5G:mnc001.mcc001.3gppnetwork.org","rand":"rand","autn":"autn","hxresStar":"hxres","message":"challenge generated"}`))
+		_, _ = writer.Write([]byte(`{"success":true,"supi":"imsi-250010000000001","authType":"5G_AKA","servingNetworkName":"5G:mnc001.mcc001.3gppnetwork.org","rand":"rand","autn":"autn","hxresStar":"hxres","message":"challenge generated"}`))
 	}))
 	defer server.Close()
 
 	client := NewClient(server.URL)
 
-	response, err := client.Initiate(AuthenticationRequest{SUPI: "imsi-001", ServingNetworkName: "5G:mnc001.mcc001.3gppnetwork.org"})
+	response, err := client.Initiate(AuthenticationRequest{SUPI: "imsi-250010000000001", ServingNetworkName: "5G:mnc001.mcc001.3gppnetwork.org"})
 	if err != nil {
 		t.Fatalf("Initiate() error = %v", err)
 	}
@@ -33,8 +33,8 @@ func TestClientShouldRetryTransientServerFailure(t *testing.T) {
 	if got := atomic.LoadInt32(&requests); got != 2 {
 		t.Fatalf("requests = %d, want 2", got)
 	}
-	if response.SUPI != "imsi-001" {
-		t.Fatalf("response supi = %s, want imsi-001", response.SUPI)
+	if response.SUPI != "imsi-250010000000001" {
+		t.Fatalf("response supi = %s, want imsi-250010000000001", response.SUPI)
 	}
 }
 
@@ -49,7 +49,7 @@ func TestClientShouldNotRetryClientFailure(t *testing.T) {
 
 	client := NewClient(server.URL)
 
-	_, err := client.Initiate(AuthenticationRequest{SUPI: "imsi-001"})
+	_, err := client.Initiate(AuthenticationRequest{SUPI: "imsi-250010000000001"})
 	if err == nil {
 		t.Fatal("Initiate() error = nil, want error")
 	}

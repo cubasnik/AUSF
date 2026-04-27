@@ -1,6 +1,6 @@
 [
   {
-    "supi": "imsi-001010000000001",
+    "supi": "imsi-250010000000001",
     "authMethod": "5G_AKA",
     "permanentKey": "465b5ce8b199b49faa5f0a2ee238a6bc",
     "opc": "e8ed289deba952e4283b54e88e6183ca",
@@ -9,7 +9,7 @@
     "routingIndicator": "0001"
   },
   {
-    "supi": "imsi-001010000000002",
+    "supi": "imsi-250010000000002",
     "authMethod": "EAP_AKA_PRIME",
     "permanentKey": "9f47cd1b2ac34cfeb61c7c8f4bb5fda1",
     "opc": "ab12cd34ef56ab78cd90ef12ab34cd56",

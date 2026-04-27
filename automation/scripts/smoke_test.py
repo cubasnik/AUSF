@@ -22,7 +22,7 @@ def load_permanent_key(supi: str) -> str:
 
 
 def main() -> int:
-    supi = "imsi-001010000000001"
+    supi = "imsi-250010000000001"
     serving_network_name = "5G:mnc001.mcc001.3gppnetwork.org"
     client = AUSFClient("http://127.0.0.1:8080")
     health = client.health()
