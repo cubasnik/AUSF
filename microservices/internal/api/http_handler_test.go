@@ -117,3 +117,45 @@ func TestAuthContextRoutesShouldAcceptEapSessionSubresource(t *testing.T) {
 		t.Fatalf("cause = %s, want CONTEXT_NOT_FOUND", problem.Cause)
 	}
 }
+
+func TestFiveGAkaConfirmationShouldRejectEapPayload(t *testing.T) {
+	handler := NewHandler(service.NewAuthService(stubControlPlaneClient{}, nil)).Routes()
+	request := httptest.NewRequest(http.MethodPost, "/nausf-auth/v1/ue-authentications/auth-1/5g-aka-confirmation", bytes.NewReader([]byte(`{"eapPayload":"EAP-Response/AKA'-Challenge token"}`)))
+	request.Header.Set("Content-Type", "application/json")
+	response := httptest.NewRecorder()
+
+	handler.ServeHTTP(response, request)
+
+	if response.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusBadRequest)
+	}
+
+	var problem ProblemDetails
+	if err := json.Unmarshal(response.Body.Bytes(), &problem); err != nil {
+		t.Fatalf("Unmarshal() error = %v", err)
+	}
+	if problem.Cause != "INVALID_CONFIRMATION_PAYLOAD" {
+		t.Fatalf("cause = %s, want INVALID_CONFIRMATION_PAYLOAD", problem.Cause)
+	}
+}
+
+func TestEapSessionShouldRejectResStar(t *testing.T) {
+	handler := NewHandler(service.NewAuthService(stubControlPlaneClient{}, nil)).Routes()
+	request := httptest.NewRequest(http.MethodPost, "/nausf-auth/v1/ue-authentications/auth-eap/eap-session", bytes.NewReader([]byte(`{"resStar":"deadbeef"}`)))
+	request.Header.Set("Content-Type", "application/json")
+	response := httptest.NewRecorder()
+
+	handler.ServeHTTP(response, request)
+
+	if response.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusBadRequest)
+	}
+
+	var problem ProblemDetails
+	if err := json.Unmarshal(response.Body.Bytes(), &problem); err != nil {
+		t.Fatalf("Unmarshal() error = %v", err)
+	}
+	if problem.Cause != "INVALID_CONFIRMATION_PAYLOAD" {
+		t.Fatalf("cause = %s, want INVALID_CONFIRMATION_PAYLOAD", problem.Cause)
+	}
+}

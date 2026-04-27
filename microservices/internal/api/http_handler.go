@@ -88,11 +88,11 @@ func (handler Handler) authContextRoutes(writer http.ResponseWriter, request *ht
 	}
 
 	if len(parts) == 2 && parts[1] == "5g-aka-confirmation" && request.Method == http.MethodPost {
-		handler.confirm(writer, request, authCtxID)
+		handler.confirm(writer, request, authCtxID, false)
 		return
 	}
 	if len(parts) == 2 && parts[1] == "eap-session" && request.Method == http.MethodPost {
-		handler.confirm(writer, request, authCtxID)
+		handler.confirm(writer, request, authCtxID, true)
 		return
 	}
 
@@ -108,9 +108,25 @@ func (handler Handler) getContext(writer http.ResponseWriter, authCtxID string) 
 	writeJSON(writer, http.StatusOK, context)
 }
 
-func (handler Handler) confirm(writer http.ResponseWriter, request *http.Request, authCtxID string) {
+func (handler Handler) confirm(writer http.ResponseWriter, request *http.Request, authCtxID string, expectsEapPayload bool) {
 	var payload confirmRequest
-	if err := json.NewDecoder(request.Body).Decode(&payload); err != nil || (payload.ResStar == "" && payload.EapPayload == "") {
+	if err := json.NewDecoder(request.Body).Decode(&payload); err != nil {
+		writeProblem(writer, http.StatusBadRequest, "Invalid request", "request body is invalid", "MALFORMED_REQUEST", request.URL.Path)
+		return
+	}
+	if expectsEapPayload {
+		if strings.TrimSpace(payload.EapPayload) == "" || strings.TrimSpace(payload.ResStar) != "" {
+			writeProblem(writer, http.StatusBadRequest, "Invalid request", "eapPayload is required for eap-session and resStar must be omitted", "INVALID_CONFIRMATION_PAYLOAD", request.URL.Path)
+			return
+		}
+	} else {
+		if strings.TrimSpace(payload.ResStar) == "" || strings.TrimSpace(payload.EapPayload) != "" {
+			writeProblem(writer, http.StatusBadRequest, "Invalid request", "resStar is required for 5g-aka-confirmation and eapPayload must be omitted", "INVALID_CONFIRMATION_PAYLOAD", request.URL.Path)
+			return
+		}
+	}
+
+	if payload.ResStar == "" && payload.EapPayload == "" {
 		writeProblem(writer, http.StatusBadRequest, "Invalid request", "resStar or eapPayload is required", "MANDATORY_IE_MISSING", request.URL.Path)
 		return
 	}

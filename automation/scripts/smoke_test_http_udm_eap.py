@@ -43,6 +43,7 @@ def main() -> int:
 
     client = AUSFClient("http://127.0.0.1:8080")
     print(f"ausf-health: {client.health()}")
+    baseline_notification_count = len(load_amf_notifications())
 
     challenge = client.initiate_authentication(
         supi,
@@ -56,7 +57,7 @@ def main() -> int:
     confirmed = client.confirm_eap_authentication(challenge["authCtxId"], eap_payload)
     print(f"confirmed: {confirmed}")
 
-    notifications = load_amf_notifications()
+    notifications = load_amf_notifications()[baseline_notification_count:]
     matching_notification = next(notification for notification in notifications if notification["authCtxId"] == challenge["authCtxId"])
     assert matching_notification["authResult"] == "SUCCESS"
     assert matching_notification["supi"] == supi
