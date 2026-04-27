@@ -15,6 +15,7 @@ type AuthContext struct {
 	SUPI               string      `json:"supi"`
 	ServingNetworkName string      `json:"servingNetworkName"`
 	AuthType           string      `json:"authType"`
+	NotificationURI    string      `json:"notificationUri,omitempty"`
 	AuthData           AuthData    `json:"5gAuthData"`
 	EapSession         *EapSession `json:"eapSession,omitempty"`
 	KSEAF              string      `json:"kseaf,omitempty"`
@@ -76,7 +77,7 @@ type controlPlaneAPI interface {
 }
 
 type namfNotifier interface {
-	NotifyUEAuthenticationStatus(notification namf.UEAuthenticationStatusNotification) error
+	NotifyUEAuthenticationStatus(notification namf.UEAuthenticationStatusNotification, notificationURI string) error
 }
 
 func NewAuthService(controlPlaneClient controlPlaneAPI, namfClient namfNotifier) *AuthService {
@@ -87,7 +88,7 @@ func NewAuthService(controlPlaneClient controlPlaneAPI, namfClient namfNotifier)
 	}
 }
 
-func (service *AuthService) CreateUEAuthentication(supi string, servingNetworkName string, authType string) (AuthContext, error) {
+func (service *AuthService) CreateUEAuthentication(supi string, servingNetworkName string, authType string, notificationURI string) (AuthContext, error) {
 	service.mu.Lock()
 	defer service.mu.Unlock()
 
@@ -107,6 +108,7 @@ func (service *AuthService) CreateUEAuthentication(supi string, servingNetworkNa
 		SUPI:               response.SUPI,
 		ServingNetworkName: response.ServingNetworkName,
 		AuthType:           response.AuthType,
+		NotificationURI:    notificationURI,
 		AuthData: AuthData{
 			RAND:      response.RAND,
 			AUTN:      response.AUTN,
@@ -161,7 +163,7 @@ func (service *AuthService) Confirm(authCtxID string, resStar string, eapPayload
 			AuthResult:         "SUCCESS",
 			KSEAF:              context.KSEAF,
 		}
-		if err := service.namfClient.NotifyUEAuthenticationStatus(notification); err != nil {
+		if err := service.namfClient.NotifyUEAuthenticationStatus(notification, context.NotificationURI); err != nil {
 			log.Printf("namf notification failed for %s: %v", authCtxID, err)
 		}
 	}

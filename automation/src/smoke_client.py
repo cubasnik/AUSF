@@ -20,15 +20,24 @@ class AUSFClient:
     def health(self) -> dict:
         return self._call("GET", "/healthz")
 
-    def initiate_authentication(self, supi: str, serving_network_name: str, auth_type: str = "5G_AKA") -> dict:
+    def initiate_authentication(
+        self,
+        supi: str,
+        serving_network_name: str,
+        auth_type: str = "5G_AKA",
+        notification_uri: str | None = None,
+    ) -> dict:
+        payload = {
+            "supiOrSuci": supi,
+            "servingNetworkName": serving_network_name,
+            "authType": auth_type,
+        }
+        if notification_uri:
+            payload["notificationUri"] = notification_uri
         return self._call(
             "POST",
             "/nausf-auth/v1/ue-authentications",
-            {
-                "supiOrSuci": supi,
-                "servingNetworkName": serving_network_name,
-                "authType": auth_type,
-            },
+            payload,
         )
 
     def confirm_authentication(self, auth_ctx_id: str, res_star: str) -> dict:

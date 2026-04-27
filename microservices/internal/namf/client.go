@@ -37,8 +37,9 @@ func NewClient(baseURL string) *Client {
 	}
 }
 
-func (client *Client) NotifyUEAuthenticationStatus(notification UEAuthenticationStatusNotification) error {
-	if client.baseURL == "" {
+func (client *Client) NotifyUEAuthenticationStatus(notification UEAuthenticationStatusNotification, notificationURI string) error {
+	endpoint, ok := client.resolveEndpoint(notification.AuthCtxID, notificationURI)
+	if !ok {
 		return nil
 	}
 
@@ -51,7 +52,7 @@ func (client *Client) NotifyUEAuthenticationStatus(notification UEAuthentication
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
 		request, requestErr := http.NewRequest(
 			http.MethodPost,
-			client.baseURL+"/namf-comm/v1/ue-authentications/"+notification.AuthCtxID+"/status-notify",
+			endpoint,
 			bytes.NewReader(body),
 		)
 		if requestErr != nil {
@@ -85,6 +86,16 @@ func (client *Client) NotifyUEAuthenticationStatus(notification UEAuthentication
 	}
 
 	return lastErr
+}
+
+func (client *Client) resolveEndpoint(authCtxID string, notificationURI string) (string, bool) {
+	if strings.TrimSpace(notificationURI) != "" {
+		return strings.ReplaceAll(strings.TrimSpace(notificationURI), "{authCtxId}", authCtxID), true
+	}
+	if client.baseURL == "" {
+		return "", false
+	}
+	return client.baseURL + "/namf-comm/v1/ue-authentications/" + authCtxID + "/status-notify", true
 }
 
 func backoffDuration(attempt int) time.Duration {

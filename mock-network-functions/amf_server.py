@@ -35,6 +35,7 @@ class Handler(BaseHTTPRequestHandler):
 
         content_length = int(self.headers.get("Content-Length", "0"))
         payload = json.loads(self.rfile.read(content_length) or b"{}")
+        payload["_requestPath"] = self.path
         with NOTIFICATIONS_LOCK:
             NOTIFICATIONS.append(payload)
         self.write_json(204, {})

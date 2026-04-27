@@ -44,7 +44,7 @@ def load_amf_notifications() -> list[dict]:
 
 
 def main() -> int:
-    supi = "imsi-001010000000001"
+    supi = "imsi-250010000000001"
     serving_network_name = "5G:mnc001.mcc001.3gppnetwork.org"
 
     print(f"nrf-health: {wait_for_health('http://127.0.0.1:8091/healthz')}")
@@ -54,7 +54,11 @@ def main() -> int:
     client = AUSFClient("http://127.0.0.1:8080")
     print(f"ausf-health: {client.health()}")
 
-    challenge = client.initiate_authentication(supi, serving_network_name)
+    challenge = client.initiate_authentication(
+        supi,
+        serving_network_name,
+        notification_uri="http://mock-amf:8092/namf-comm/v1/ue-authentications/{authCtxId}/status-notify",
+    )
     auth_data = challenge["5gAuthData"]
     permanent_key = load_permanent_key(supi)
     expected_res_star = hashlib.sha256(f"{auth_data['rand']}{auth_data['autn']}{permanent_key}".encode("utf-8")).hexdigest()[:32]
@@ -65,6 +69,7 @@ def main() -> int:
     matching_notification = next(notification for notification in notifications if notification["authCtxId"] == challenge["authCtxId"])
     assert matching_notification["authResult"] == "SUCCESS"
     assert matching_notification["supi"] == supi
+    assert matching_notification["_requestPath"] == f"/namf-comm/v1/ue-authentications/{challenge['authCtxId']}/status-notify"
     print(f"amf-notification: {matching_notification}")
     return 0
 

@@ -22,7 +22,7 @@ func TestClientShouldRetryTransientFailure(t *testing.T) {
 
 	client := NewClient(server.URL)
 
-	err := client.NotifyUEAuthenticationStatus(UEAuthenticationStatusNotification{AuthCtxID: "auth-1", SUPI: "imsi-001", AuthResult: "SUCCESS"})
+	err := client.NotifyUEAuthenticationStatus(UEAuthenticationStatusNotification{AuthCtxID: "auth-1", SUPI: "imsi-250010000000001", AuthResult: "SUCCESS"}, "")
 	if err != nil {
 		t.Fatalf("NotifyUEAuthenticationStatus() error = %v", err)
 	}
@@ -33,7 +33,7 @@ func TestClientShouldRetryTransientFailure(t *testing.T) {
 
 func TestClientShouldSkipWhenBaseURLIsBlank(t *testing.T) {
 	client := NewClient("")
-	if err := client.NotifyUEAuthenticationStatus(UEAuthenticationStatusNotification{AuthCtxID: "auth-1"}); err != nil {
+	if err := client.NotifyUEAuthenticationStatus(UEAuthenticationStatusNotification{AuthCtxID: "auth-1"}, ""); err != nil {
 		t.Fatalf("NotifyUEAuthenticationStatus() error = %v", err)
 	}
 }
@@ -47,8 +47,8 @@ func TestClientShouldSendExpectedPayload(t *testing.T) {
 		if err := json.NewDecoder(request.Body).Decode(&payload); err != nil {
 			t.Fatalf("decode payload: %v", err)
 		}
-		if payload.SUPI != "imsi-009" {
-			t.Fatalf("payload supi = %s, want imsi-009", payload.SUPI)
+		if payload.SUPI != "imsi-250010000000009" {
+			t.Fatalf("payload supi = %s, want imsi-250010000000009", payload.SUPI)
 		}
 		writer.WriteHeader(http.StatusNoContent)
 	}))
@@ -57,9 +57,29 @@ func TestClientShouldSendExpectedPayload(t *testing.T) {
 	client := NewClient(server.URL)
 	err := client.NotifyUEAuthenticationStatus(UEAuthenticationStatusNotification{
 		AuthCtxID:  "auth-9",
-		SUPI:       "imsi-009",
+		SUPI:       "imsi-250010000000009",
 		AuthResult: "SUCCESS",
-	})
+	}, "")
+	if err != nil {
+		t.Fatalf("NotifyUEAuthenticationStatus() error = %v", err)
+	}
+}
+
+func TestClientShouldUseNotificationUriTemplateWhenProvided(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if request.URL.Path != "/custom/auth-7/callback" {
+			t.Fatalf("path = %s, want /custom/auth-7/callback", request.URL.Path)
+		}
+		writer.WriteHeader(http.StatusNoContent)
+	}))
+	defer server.Close()
+
+	client := NewClient("")
+	err := client.NotifyUEAuthenticationStatus(UEAuthenticationStatusNotification{
+		AuthCtxID:  "auth-7",
+		SUPI:       "imsi-250010000000007",
+		AuthResult: "SUCCESS",
+	}, server.URL+"/custom/{authCtxId}/callback")
 	if err != nil {
 		t.Fatalf("NotifyUEAuthenticationStatus() error = %v", err)
 	}

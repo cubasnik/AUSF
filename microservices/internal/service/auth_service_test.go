@@ -25,10 +25,12 @@ func (client stubControlPlaneClient) Context(supi string) (controlplane.Authenti
 
 type stubNamfClient struct {
 	notifications []namf.UEAuthenticationStatusNotification
+	uris          []string
 }
 
-func (client *stubNamfClient) NotifyUEAuthenticationStatus(notification namf.UEAuthenticationStatusNotification) error {
+func (client *stubNamfClient) NotifyUEAuthenticationStatus(notification namf.UEAuthenticationStatusNotification, notificationURI string) error {
 	client.notifications = append(client.notifications, notification)
+	client.uris = append(client.uris, notificationURI)
 	return nil
 }
 
@@ -43,9 +45,10 @@ func TestConfirmShouldNotifyNamfOnSuccessfulAuthentication(t *testing.T) {
 	}, namfClient)
 	authService.contexts["auth-1"] = AuthContext{
 		AuthCtxID:          "auth-1",
-		SUPI:               "imsi-001010000000001",
+		SUPI:               "imsi-250010000000001",
 		AuthType:           "5G_AKA",
 		ServingNetworkName: "5G:mnc001.mcc001.3gppnetwork.org",
+		NotificationURI:    "http://mock-amf:8092/namf-comm/v1/ue-authentications/{authCtxId}/status-notify",
 		Status:             "CHALLENGE_SENT",
 	}
 
@@ -65,5 +68,8 @@ func TestConfirmShouldNotifyNamfOnSuccessfulAuthentication(t *testing.T) {
 	}
 	if namfClient.notifications[0].KSEAF != "kseaf-1" {
 		t.Fatalf("notification kseaf = %s, want kseaf-1", namfClient.notifications[0].KSEAF)
+	}
+	if namfClient.uris[0] != "http://mock-amf:8092/namf-comm/v1/ue-authentications/{authCtxId}/status-notify" {
+		t.Fatalf("notification uri = %s, want callback template", namfClient.uris[0])
 	}
 }

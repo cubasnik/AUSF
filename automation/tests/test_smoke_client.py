@@ -15,6 +15,8 @@ from smoke_client import AUSFClient, AUSFError
 
 
 class _Handler(BaseHTTPRequestHandler):
+    last_create_payload: dict | None = None
+
     def do_GET(self) -> None:
         if self.path == "/healthz":
             self.send_response(200)
@@ -50,6 +52,7 @@ class _Handler(BaseHTTPRequestHandler):
         body = self.rfile.read(int(self.headers.get("Content-Length", "0")))
         payload = json.loads(body.decode("utf-8"))
         if self.path == "/nausf-auth/v1/ue-authentications":
+            _Handler.last_create_payload = payload
             if payload["supiOrSuci"] == "bad-request":
                 self.send_response(400)
                 self.send_header("Content-Type", "application/problem+json")
@@ -107,7 +110,7 @@ class AUSFClientTest(unittest.TestCase):
         client = AUSFClient("http://127.0.0.1:18080")
 
         health = client.health()
-        challenge = client.initiate_authentication("imsi-001010000000001", "5G:mnc001.mcc001.3gppnetwork.org")
+        challenge = client.initiate_authentication("imsi-250010000000001", "5G:mnc001.mcc001.3gppnetwork.org")
         context = client.get_authentication_context("auth-1")
         confirmed = client.confirm_authentication("auth-1", "feedface")
         client.delete_authentication_context("auth-1")
@@ -121,7 +124,7 @@ class AUSFClientTest(unittest.TestCase):
         client = AUSFClient("http://127.0.0.1:18080")
 
         challenge = client.initiate_authentication(
-            "imsi-001010000000002",
+            "imsi-250010000000002",
             "5G:mnc001.mcc001.3gppnetwork.org",
             auth_type="EAP_AKA_PRIME",
         )
@@ -139,6 +142,20 @@ class AUSFClientTest(unittest.TestCase):
 
         self.assertEqual(400, error.exception.status_code)
         self.assertEqual("Invalid request", error.exception.payload["title"])
+
+    def test_notification_uri_is_sent_when_provided(self) -> None:
+        client = AUSFClient("http://127.0.0.1:18080")
+
+        client.initiate_authentication(
+            "imsi-250010000000001",
+            "5G:mnc001.mcc001.3gppnetwork.org",
+            notification_uri="http://mock-amf:8092/namf-comm/v1/ue-authentications/{authCtxId}/status-notify",
+        )
+
+        self.assertEqual(
+            "http://mock-amf:8092/namf-comm/v1/ue-authentications/{authCtxId}/status-notify",
+            _Handler.last_create_payload["notificationUri"],
+        )
 
 
 if __name__ == "__main__":

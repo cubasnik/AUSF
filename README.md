@@ -44,9 +44,10 @@ Example create request:
 
 ```json
 {
-  "supiOrSuci": "imsi-001010000000001",
+  "supiOrSuci": "imsi-250010000000001",
   "servingNetworkName": "5G:mnc001.mcc001.3gppnetwork.org",
-  "authType": "5G_AKA"
+  "authType": "5G_AKA",
+  "notificationUri": "http://mock-amf:8092/namf-comm/v1/ue-authentications/{authCtxId}/status-notify"
 }
 ```
 
@@ -55,7 +56,7 @@ Example `5G_AKA` response:
 ```json
 {
   "authCtxId": "auth-1",
-  "supi": "imsi-001010000000001",
+  "supi": "imsi-250010000000001",
   "servingNetworkName": "5G:mnc001.mcc001.3gppnetwork.org",
   "authType": "5G_AKA",
   "5gAuthData": {
@@ -78,7 +79,7 @@ Example `EAP_AKA_PRIME` response:
 ```json
 {
   "authCtxId": "auth-2",
-  "supi": "imsi-001010000000002",
+  "supi": "imsi-250010000000002",
   "servingNetworkName": "5G:mnc001.mcc001.3gppnetwork.org",
   "authType": "EAP_AKA_PRIME",
   "eapSession": {
@@ -251,9 +252,12 @@ make control-plane-test
 make microservices-build
 make automation-test
 make compose-up
+make compose-refresh-mocks
 ```
 
 If you work on Windows without `make`, use Git Bash, MSYS2, WSL, or run the equivalent commands manually.
+
+For the bind-mounted Python mock services, a plain `docker compose up -d` does not restart an already running container, so code changes in `mock-amf` or `mock-nrf` may not be picked up immediately. Use `make compose-refresh-mocks` or run `pwsh -File automation/scripts/refresh_mock_services.ps1` to force a clean stop/remove/recreate cycle for those two services.
 
 ## Docker Compose
 
@@ -281,6 +285,8 @@ Important runtime variables:
 - `AUSF_UDM_BASE_URL` points the control-plane directly at an external UDM when `AUSF_UDM_MODE=http`.
 - `AUSF_NNRF_BASE_URL` points the control-plane at an external NRF discovery service when the UDM location should be resolved dynamically.
 - `AUSF_NAMF_BASE_URL` points the Go AUSF service at an AMF-facing status notification endpoint.
+
+When `notificationUri` is provided on the create request, the Go AUSF service uses that per-session callback template in preference to the global `AUSF_NAMF_BASE_URL`. The `{authCtxId}` placeholder is replaced with the generated authentication context identifier before the Namf callback is sent.
 
 When `AUSF_NNRF_BASE_URL` is set and `AUSF_UDM_BASE_URL` is empty, the control-plane first calls:
 
@@ -325,7 +331,7 @@ Expected request body:
 ```json
 {
   "authCtxId": "auth-1",
-  "supi": "imsi-001010000000001",
+  "supi": "imsi-250010000000001",
   "authType": "5G_AKA",
   "servingNetworkName": "5G:mnc001.mcc001.3gppnetwork.org",
   "authResult": "SUCCESS",
@@ -337,7 +343,7 @@ Expected response body:
 
 ```json
 {
-  "supi": "imsi-001010000000001",
+  "supi": "imsi-250010000000001",
   "authType": "5G_AKA",
   "servingNetworkName": "5G:mnc001.mcc001.3gppnetwork.org",
   "rand": "...",
