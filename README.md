@@ -33,7 +33,8 @@ The Go service exposes a simplified AUSF flow under `nausf-auth`:
 1. `POST /nausf-auth/v1/ue-authentications`
 2. `GET /nausf-auth/v1/ue-authentications/{authCtxId}`
 3. `POST /nausf-auth/v1/ue-authentications/{authCtxId}/5g-aka-confirmation`
-4. `DELETE /nausf-auth/v1/ue-authentications/{authCtxId}`
+4. `POST /nausf-auth/v1/ue-authentications/{authCtxId}/eap-session`
+5. `DELETE /nausf-auth/v1/ue-authentications/{authCtxId}`
 
 Supported authentication modes:
 
@@ -86,6 +87,11 @@ Example `EAP_AKA_PRIME` response:
     "method": "EAP-AKA'",
     "payload": "EAP-Request/AKA'-Challenge ...",
     "sessionId": "auth-2"
+  },
+  "_links": {
+    "eap-session": {
+      "href": "/nausf-auth/v1/ue-authentications/auth-2/eap-session"
+    }
   },
   "status": "CHALLENGE_SENT"
 }

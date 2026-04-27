@@ -50,7 +50,7 @@ class AUSFClient:
     def confirm_eap_authentication(self, auth_ctx_id: str, eap_payload: str) -> dict:
         return self._call(
             "POST",
-            f"/nausf-auth/v1/ue-authentications/{auth_ctx_id}/5g-aka-confirmation",
+            f"/nausf-auth/v1/ue-authentications/{auth_ctx_id}/eap-session",
             {"eapPayload": eap_payload},
         )
 

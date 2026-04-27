@@ -8,11 +8,20 @@ import (
 )
 
 type stubControlPlaneClient struct {
+	initiateResponse controlplane.AuthenticationResponse
 	confirmResponse controlplane.AuthenticationResponse
 }
 
 func (client stubControlPlaneClient) Initiate(request controlplane.AuthenticationRequest) (controlplane.AuthenticationResponse, error) {
-	return controlplane.AuthenticationResponse{}, nil
+	if client.initiateResponse.SUPI != "" {
+		return client.initiateResponse, nil
+	}
+	return controlplane.AuthenticationResponse{
+		Success:            true,
+		SUPI:               request.SUPI,
+		AuthType:           request.AuthType,
+		ServingNetworkName: request.ServingNetworkName,
+	}, nil
 }
 
 func (client stubControlPlaneClient) Confirm(supi string, request controlplane.AuthenticationRequest) (controlplane.AuthenticationResponse, error) {
@@ -71,5 +80,36 @@ func TestConfirmShouldNotifyNamfOnSuccessfulAuthentication(t *testing.T) {
 	}
 	if namfClient.uris[0] != "http://mock-amf:8092/namf-comm/v1/ue-authentications/{authCtxId}/status-notify" {
 		t.Fatalf("notification uri = %s, want callback template", namfClient.uris[0])
+	}
+}
+
+func TestCreateUEAuthenticationShouldExposeEapSessionLinkForEapAkaPrime(t *testing.T) {
+	authService := NewAuthService(stubControlPlaneClient{
+		initiateResponse: controlplane.AuthenticationResponse{
+			Success:            true,
+			SUPI:               "imsi-250010000000002",
+			AuthType:           "EAP_AKA_PRIME",
+			ServingNetworkName: "5G:mnc001.mcc001.3gppnetwork.org",
+			EapChallenge:       "EAP-Request/AKA'-Challenge token",
+		},
+	}, nil)
+
+	context, err := authService.CreateUEAuthentication(
+		"imsi-250010000000002",
+		"5G:mnc001.mcc001.3gppnetwork.org",
+		"EAP_AKA_PRIME",
+		"",
+	)
+	if err != nil {
+		t.Fatalf("CreateUEAuthentication() error = %v", err)
+	}
+	if context.Links.EapSession == nil {
+		t.Fatal("eap-session link = nil, want link")
+	}
+	if context.Links.EapSession.Href != "/nausf-auth/v1/ue-authentications/auth-1/eap-session" {
+		t.Fatalf("eap-session link = %s, want /nausf-auth/v1/ue-authentications/auth-1/eap-session", context.Links.EapSession.Href)
+	}
+	if context.Links.FiveGAka != nil {
+		t.Fatalf("5g-aka link = %#v, want nil", context.Links.FiveGAka)
 	}
 }

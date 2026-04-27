@@ -37,7 +37,8 @@ type EapSession struct {
 }
 
 type AuthLinks struct {
-	FiveGAka Link `json:"5g-aka,omitempty"`
+	FiveGAka   *Link `json:"5g-aka,omitempty"`
+	EapSession *Link `json:"eap-session,omitempty"`
 }
 
 type Link struct {
@@ -115,9 +116,7 @@ func (service *AuthService) CreateUEAuthentication(supi string, servingNetworkNa
 			HXRESStar: response.HXRESStar,
 		},
 		Status: "CHALLENGE_SENT",
-		Links: AuthLinks{
-			FiveGAka: Link{Href: "/nausf-auth/v1/ue-authentications/" + authCtxID + "/5g-aka-confirmation"},
-		},
+		Links: AuthLinks{},
 		CreatedAt: time.Now().UTC(),
 	}
 	if context.AuthType == "EAP_AKA_PRIME" {
@@ -127,6 +126,9 @@ func (service *AuthService) CreateUEAuthentication(supi string, servingNetworkNa
 			SessionID: authCtxID,
 		}
 		context.AuthData = AuthData{}
+		context.Links.EapSession = &Link{Href: "/nausf-auth/v1/ue-authentications/" + authCtxID + "/eap-session"}
+	} else {
+		context.Links.FiveGAka = &Link{Href: "/nausf-auth/v1/ue-authentications/" + authCtxID + "/5g-aka-confirmation"}
 	}
 
 	service.contexts[authCtxID] = context

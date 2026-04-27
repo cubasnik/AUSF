@@ -91,6 +91,10 @@ func (handler Handler) authContextRoutes(writer http.ResponseWriter, request *ht
 		handler.confirm(writer, request, authCtxID)
 		return
 	}
+	if len(parts) == 2 && parts[1] == "eap-session" && request.Method == http.MethodPost {
+		handler.confirm(writer, request, authCtxID)
+		return
+	}
 
 	writeProblem(writer, http.StatusNotFound, "Resource not found", "requested AUSF sub-resource is not implemented", "RESOURCE_UNKNOWN", request.URL.Path)
 }

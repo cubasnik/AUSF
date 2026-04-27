@@ -96,3 +96,24 @@ func TestCreateUEAuthenticationShouldAcceptAbsoluteNotificationURI(t *testing.T)
 		t.Fatalf("notification uri = %s, want %s", context.NotificationURI, payload["notificationUri"])
 	}
 }
+
+func TestAuthContextRoutesShouldAcceptEapSessionSubresource(t *testing.T) {
+	handler := NewHandler(service.NewAuthService(stubControlPlaneClient{}, nil)).Routes()
+	request := httptest.NewRequest(http.MethodPost, "/nausf-auth/v1/ue-authentications/auth-eap/eap-session", bytes.NewReader([]byte(`{"eapPayload":"EAP-Response/AKA'-Challenge token"}`)))
+	request.Header.Set("Content-Type", "application/json")
+	response := httptest.NewRecorder()
+
+	handler.ServeHTTP(response, request)
+
+	if response.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want %d when context is missing but route is recognized", response.Code, http.StatusNotFound)
+	}
+
+	var problem ProblemDetails
+	if err := json.Unmarshal(response.Body.Bytes(), &problem); err != nil {
+		t.Fatalf("Unmarshal() error = %v", err)
+	}
+	if problem.Cause != "CONTEXT_NOT_FOUND" {
+		t.Fatalf("cause = %s, want CONTEXT_NOT_FOUND", problem.Cause)
+	}
+}

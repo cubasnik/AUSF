@@ -16,6 +16,7 @@ from smoke_client import AUSFClient, AUSFError
 
 class _Handler(BaseHTTPRequestHandler):
     last_create_payload: dict | None = None
+    last_confirm_path: str | None = None
 
     def do_GET(self) -> None:
         if self.path == "/healthz":
@@ -66,7 +67,7 @@ class _Handler(BaseHTTPRequestHandler):
                     "servingNetworkName": payload["servingNetworkName"],
                     "authType": payload["authType"],
                     "eapSession": {"method": "EAP-AKA'", "payload": "EAP-Request/AKA'-Challenge token", "sessionId": "auth-eap"},
-                    "_links": {"5g-aka": {"href": "/nausf-auth/v1/ue-authentications/auth-eap/5g-aka-confirmation"}},
+                    "_links": {"eap-session": {"href": "/nausf-auth/v1/ue-authentications/auth-eap/eap-session"}},
                 }
                 self.send_response(201)
                 self.send_header("Content-Type", "application/json")
@@ -83,6 +84,7 @@ class _Handler(BaseHTTPRequestHandler):
             }
             self.send_response(201)
         else:
+            _Handler.last_confirm_path = self.path
             response = {"authCtxId": "auth-1", "authResult": "SUCCESS", "kseaf": payload.get("resStar") or payload.get("eapPayload")}
             self.send_response(200)
         self.send_header("Content-Type", "application/json")
@@ -132,6 +134,7 @@ class AUSFClientTest(unittest.TestCase):
 
         self.assertEqual("EAP_AKA_PRIME", challenge["authType"])
         self.assertEqual("EAP-AKA'", challenge["eapSession"]["method"])
+        self.assertEqual("/nausf-auth/v1/ue-authentications/auth-eap/eap-session", _Handler.last_confirm_path)
         self.assertEqual("SUCCESS", confirmed["authResult"])
 
     def test_problem_details_are_raised(self) -> None:
