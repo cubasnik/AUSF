@@ -15,6 +15,7 @@ PYTHON = sys.executable
 SMOKE_SCRIPTS = [
     "automation/scripts/smoke_test_http_udm.py",
     "automation/scripts/smoke_test_http_udm_eap.py",
+    "automation/scripts/smoke_test_http_udm_invalid_notification_uri.py",
     "automation/scripts/smoke_test_http_udm_missing_context.py",
     "automation/scripts/smoke_test_http_udm_missing_subscriber.py",
     "automation/scripts/smoke_test_http_udm_authentication_rejected.py",

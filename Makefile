@@ -1,4 +1,4 @@
-.PHONY: help networking-build networking-run control-plane-test control-plane-run microservices-build microservices-run automation-test smoke-test http-udm-smoke-suite compose-up compose-down compose-logs compose-refresh-mocks
+.PHONY: help networking-build networking-run control-plane-test control-plane-run microservices-build microservices-run automation-test smoke-test http-udm-smoke-suite validate-all compose-up compose-down compose-logs compose-refresh-mocks
 
 help:
 	@echo "AUSF polyglot workspace"
@@ -12,6 +12,7 @@ help:
 	@echo "  make automation-test    Run Python automation tests"
 	@echo "  make smoke-test         Run Python end-to-end smoke client"
 	@echo "  make http-udm-smoke-suite Run the full HTTP UDM happy/negative smoke suite"
+	@echo "  make validate-all      Run Python, Go, Java, and HTTP UDM validation in one shot"
 	@echo "  make compose-up         Start Go and Java services in Docker"
 	@echo "  make compose-down       Stop Docker Compose stack"
 	@echo "  make compose-refresh-mocks Restart mock-amf and mock-nrf reliably"
@@ -44,6 +45,9 @@ smoke-test:
 
 http-udm-smoke-suite:
 	python automation/scripts/run_http_udm_smoke_suite.py
+
+validate-all:
+	python automation/scripts/run_full_validation.py
 
 compose-up:
 	docker compose up --build -d
