@@ -26,6 +26,24 @@ class AuthenticationControllerTest {
     private AuthenticationManager authenticationManager;
 
     @Test
+    void shouldReturnNotFoundWhenInitiateCannotFindSubscriber() throws Exception {
+        when(authenticationManager.initiateAuthentication(eq("imsi-250019999999999"), any(), any()))
+            .thenReturn(AuthenticationResponse.failure("subscriber not found in UDM storage", "SUBSCRIBER_NOT_FOUND"));
+
+        mockMvc.perform(post("/control-plane/v1/auth/initiate")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "supi": "imsi-250019999999999",
+                      "servingNetworkName": "5G:mnc001.mcc001.3gppnetwork.org",
+                      "authType": "5G_AKA"
+                    }
+                    """))
+            .andExpect(status().isNotFound())
+            .andExpect(jsonPath("$.errorCode").value("SUBSCRIBER_NOT_FOUND"));
+    }
+
+    @Test
     void shouldReturnNotFoundWhenConfirmationContextIsMissing() throws Exception {
         when(authenticationManager.verifyAuthenticationResponse(eq("missing"), any(), any()))
             .thenReturn(AuthenticationResponse.failure("authentication context missing or expired", "CONTEXT_NOT_FOUND"));

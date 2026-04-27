@@ -110,6 +110,15 @@ Example `ProblemDetails` error:
 }
 ```
 
+Current Java -> Go -> AUSF error contract:
+
+| Cause | Java control-plane status | AUSF API status | Where it applies |
+| --- | --- | --- | --- |
+| `SUBSCRIBER_NOT_FOUND` | `404` | `404` | initiate when the UDM-backed subscriber lookup returns no profile |
+| `AUTHENTICATION_REJECTED` | `401` | `401` | confirm when `resStar` or `eapPayload` verification fails |
+| `CONTEXT_NOT_FOUND` | `404` | `404` | confirm when the Java auth context is missing or expired, or when the Go auth context is absent |
+| `CONTROL_PLANE_UNAVAILABLE` | n/a | `502` | initiate or confirm when the Go AUSF service cannot reach the Java control-plane or cannot decode a usable upstream response |
+
 Important note:
 
 - The crypto is intentionally simplified for development. It is not a standards-compliant Milenage or TUAK implementation.

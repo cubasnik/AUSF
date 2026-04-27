@@ -101,3 +101,73 @@ func TestConfirmShouldReturnNotFoundWhenControlPlaneContextIsMissing(t *testing.
 	}
 	_ = fmt.Sprintf("%v", apiErr)
 }
+
+func TestInitiateShouldReturnNotFoundWhenSubscriberIsMissing(t *testing.T) {
+	var requests int32
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		atomic.AddInt32(&requests, 1)
+		writer.WriteHeader(http.StatusNotFound)
+		_, _ = writer.Write([]byte(`{"message":"subscriber not found in UDM storage","errorCode":"SUBSCRIBER_NOT_FOUND"}`))
+	}))
+	defer server.Close()
+
+	client := NewClient(server.URL)
+
+	_, err := client.Initiate(AuthenticationRequest{SUPI: "imsi-250019999999999", ServingNetworkName: "5G:mnc001.mcc001.3gppnetwork.org", AuthType: "5G_AKA"})
+	if err == nil {
+		t.Fatal("Initiate() error = nil, want error")
+	}
+
+	apiErr, ok := err.(APIError)
+	if !ok {
+		t.Fatalf("error type = %T, want APIError", err)
+	}
+	if apiErr.StatusCode != http.StatusNotFound {
+		t.Fatalf("status code = %d, want %d", apiErr.StatusCode, http.StatusNotFound)
+	}
+	if apiErr.Message != "subscriber not found in UDM storage" {
+		t.Fatalf("message = %s, want subscriber not found in UDM storage", apiErr.Message)
+	}
+	if apiErr.ErrorCode != "SUBSCRIBER_NOT_FOUND" {
+		t.Fatalf("error code = %s, want SUBSCRIBER_NOT_FOUND", apiErr.ErrorCode)
+	}
+	if got := atomic.LoadInt32(&requests); got != 1 {
+		t.Fatalf("requests = %d, want 1", got)
+	}
+	_ = fmt.Sprintf("%v", apiErr)
+}
+
+func TestConfirmShouldReturnUnauthorizedWhenAuthenticationIsRejected(t *testing.T) {
+	var requests int32
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		atomic.AddInt32(&requests, 1)
+		writer.WriteHeader(http.StatusUnauthorized)
+		_, _ = writer.Write([]byte(`{"message":"RES* verification failed","errorCode":"AUTHENTICATION_REJECTED"}`))
+	}))
+	defer server.Close()
+
+	client := NewClient(server.URL)
+
+	_, err := client.Confirm("imsi-250010000000001", AuthenticationRequest{ResStar: "deadbeef"})
+	if err == nil {
+		t.Fatal("Confirm() error = nil, want error")
+	}
+
+	apiErr, ok := err.(APIError)
+	if !ok {
+		t.Fatalf("error type = %T, want APIError", err)
+	}
+	if apiErr.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("status code = %d, want %d", apiErr.StatusCode, http.StatusUnauthorized)
+	}
+	if apiErr.Message != "RES* verification failed" {
+		t.Fatalf("message = %s, want RES* verification failed", apiErr.Message)
+	}
+	if apiErr.ErrorCode != "AUTHENTICATION_REJECTED" {
+		t.Fatalf("error code = %s, want AUTHENTICATION_REJECTED", apiErr.ErrorCode)
+	}
+	if got := atomic.LoadInt32(&requests); got != 1 {
+		t.Fatalf("requests = %d, want 1", got)
+	}
+	_ = fmt.Sprintf("%v", apiErr)
+}

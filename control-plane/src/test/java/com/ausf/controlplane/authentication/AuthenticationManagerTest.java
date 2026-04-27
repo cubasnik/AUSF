@@ -84,6 +84,36 @@ class AuthenticationManagerTest {
     }
 
     @Test
+    void shouldRejectUnknownSubscriberDuringInitiate() {
+        AuthenticationResponse result = authenticationManager.initiateAuthentication(
+            "imsi-250019999999999",
+            "5G:mnc001.mcc001.3gppnetwork.org",
+            "5G_AKA"
+        );
+
+        assertFalse(result.getSuccess());
+        assertEquals("SUBSCRIBER_NOT_FOUND", result.getErrorCode());
+    }
+
+    @Test
+    void shouldRejectInvalidResStar() {
+        authenticationManager.initiateAuthentication(
+            "imsi-250010000000001",
+            "5G:mnc001.mcc001.3gppnetwork.org",
+            "5G_AKA"
+        );
+
+        AuthenticationResponse result = authenticationManager.verifyAuthenticationResponse(
+            "imsi-250010000000001",
+            "deadbeef",
+            null
+        );
+
+        assertFalse(result.getSuccess());
+        assertEquals("AUTHENTICATION_REJECTED", result.getErrorCode());
+    }
+
+    @Test
     void shouldHonorServingNetworkNameOverrideWhenInitiatingAuthentication() {
         AuthenticationResponse challenge = authenticationManager.initiateAuthentication(
             "imsi-250010000000001",
