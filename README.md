@@ -110,14 +110,45 @@ Example `ProblemDetails` error:
 }
 ```
 
-Current Java -> Go -> AUSF error contract:
+## Operational contract
 
-| Cause | Java control-plane status | AUSF API status | Where it applies |
-| --- | --- | --- | --- |
-| `SUBSCRIBER_NOT_FOUND` | `404` | `404` | initiate when the UDM-backed subscriber lookup returns no profile |
-| `AUTHENTICATION_REJECTED` | `401` | `401` | confirm when `resStar` or `eapPayload` verification fails |
-| `CONTEXT_NOT_FOUND` | `404` | `404` | confirm when the Java auth context is missing or expired, or when the Go auth context is absent |
-| `CONTROL_PLANE_UNAVAILABLE` | n/a | `502` | initiate or confirm when the Go AUSF service cannot reach the Java control-plane or cannot decode a usable upstream response |
+### Public endpoint contract
+
+| Method and path | Success response | Failure responses |
+| --- | --- | --- |
+| `GET /healthz` | `200 OK`; body: `{"status":"ok"}` | No endpoint-specific `ProblemDetails` contract; failures are generic transport/runtime failures |
+| `POST /nausf-auth/v1/ue-authentications` | `201 Created`; `Location` header set to `/nausf-auth/v1/ue-authentications/{authCtxId}`; body contains `authCtxId`, `supi`, `authType`, `status=CHALLENGE_SENT`, and either `5gAuthData` for `5G_AKA` or `eapSession` for `EAP_AKA_PRIME` | `400 MANDATORY_IE_MISSING`; `400 INVALID_NOTIFICATION_URI`; `404 SUBSCRIBER_NOT_FOUND`; `502 CONTROL_PLANE_UNAVAILABLE`; `405 METHOD_NOT_ALLOWED` |
+| `GET /nausf-auth/v1/ue-authentications/{authCtxId}` | `200 OK`; body contains the currently stored auth context for `authCtxId` | `404 CONTEXT_NOT_FOUND` |
+| `POST /nausf-auth/v1/ue-authentications/{authCtxId}/5g-aka-confirmation` | `200 OK`; body contains `authCtxId`, `supi`, `authResult=SUCCESS`, `kseaf`, and confirmation `message` | `400 MALFORMED_REQUEST`; `400 INVALID_CONFIRMATION_PAYLOAD`; `404 CONTEXT_NOT_FOUND`; `401 AUTHENTICATION_REJECTED`; `502 CONTROL_PLANE_UNAVAILABLE` |
+| `POST /nausf-auth/v1/ue-authentications/{authCtxId}/eap-session` | `200 OK`; body contains `authCtxId`, `supi`, `authResult=SUCCESS`, `kseaf`, and confirmation `message` | `400 MALFORMED_REQUEST`; `400 INVALID_CONFIRMATION_PAYLOAD`; `404 CONTEXT_NOT_FOUND`; `401 AUTHENTICATION_REJECTED`; `502 CONTROL_PLANE_UNAVAILABLE` |
+| `DELETE /nausf-auth/v1/ue-authentications/{authCtxId}` | `204 No Content`; response body omitted | `404 CONTEXT_NOT_FOUND` |
+
+Additional route behavior:
+
+- Unknown AUSF sub-resources return `404 RESOURCE_UNKNOWN`.
+- `5g-aka-confirmation` requires `resStar` and rejects `eapPayload` with `400 INVALID_CONFIRMATION_PAYLOAD`.
+- `eap-session` requires `eapPayload` and rejects `resStar` with `400 INVALID_CONFIRMATION_PAYLOAD`.
+- The current Java -> Go propagated failure causes are `SUBSCRIBER_NOT_FOUND`, `AUTHENTICATION_REJECTED`, `CONTEXT_NOT_FOUND`, and `CONTROL_PLANE_UNAVAILABLE`.
+
+### Confirmed scenarios
+
+| Scenario | Evidence | Confirmed result |
+| --- | --- | --- |
+| Base AUSF happy path on fresh compose startup | `python automation/scripts/smoke_test.py` | Service readiness, create challenge, and confirm success complete without an early `502` |
+| `5G_AKA` happy path with Namf callback | `python automation/scripts/smoke_test_http_udm.py` | Challenge and confirmation succeed; Namf callback is emitted |
+| `EAP_AKA_PRIME` happy path with Namf callback | `python automation/scripts/smoke_test_http_udm_eap.py` | EAP challenge and confirmation succeed; Namf callback is emitted |
+| Invalid `notificationUri` negative path | `python automation/scripts/smoke_test_http_udm_invalid_notification_uri.py` | `400 INVALID_NOTIFICATION_URI`; no Namf callback |
+| Missing context negative path | `python automation/scripts/smoke_test_http_udm_missing_context.py` | `404 CONTEXT_NOT_FOUND`; no Namf callback |
+| Missing subscriber negative path | `python automation/scripts/smoke_test_http_udm_missing_subscriber.py` | `404 SUBSCRIBER_NOT_FOUND`; no Namf callback |
+| `5G_AKA` authentication rejection | `python automation/scripts/smoke_test_http_udm_authentication_rejected.py` | `401 AUTHENTICATION_REJECTED`; no Namf callback |
+| `EAP_AKA_PRIME` authentication rejection | `python automation/scripts/smoke_test_http_udm_eap_authentication_rejected.py` | `401 AUTHENTICATION_REJECTED`; no Namf callback |
+
+### Supporting validation
+
+- `python -m unittest discover -s automation/tests` confirms Python client and helper behavior.
+- `go test ./internal/api ./internal/controlplane ./internal/namf ./internal/service` confirms the focused Go service, API, and control-plane adapter slices.
+- `mvn -q -Dtest=AuthenticationManagerTest,AuthenticationControllerTest,NnrfClientTest,HttpUdmClientTest test` confirms the focused Java control-plane slices.
+- `pwsh -File automation/scripts/run_pre_push_regression.ps1` is the current one-command reproducible pre-push run.
 
 Important note:
 
@@ -264,6 +295,7 @@ python scripts/smoke_test_http_udm_authentication_rejected.py
 python scripts/smoke_test_http_udm_eap_authentication_rejected.py
 python scripts/run_http_udm_smoke_suite.py
 python scripts/run_full_validation.py
+pwsh -File scripts/run_pre_push_regression.ps1
 ```
 
 The HTTP UDM smoke coverage is split by auth mode:
@@ -299,7 +331,7 @@ For the bind-mounted Python mock services, a plain `docker compose up -d` does n
 
 To run the full HTTP UDM happy/negative validation set in one shot, use `make http-udm-smoke-suite` or `python automation/scripts/run_http_udm_smoke_suite.py`. The suite brings the compose stack up, runs three happy-path smoke scenarios (`smoke_test.py`, `smoke_test_http_udm.py`, `smoke_test_http_udm_eap.py`), then the negative HTTP UDM scenarios, and always tears the stack down at the end.
 
-To run the current minimal reproducible pre-push regression suite in one shot, use `make regression-suite`, `make validate-all`, or `python automation/scripts/run_full_validation.py`. This wrapper runs Python unit tests, focused Go tests in the pinned Go devcontainer image, focused Java tests in the pinned Java 25 devcontainer image, and then the full HTTP UDM happy/negative smoke suite.
+To run the current minimal reproducible pre-push regression suite in one shot, use `make regression-suite`, `make validate-all`, `python automation/scripts/run_full_validation.py`, or `pwsh -File automation/scripts/run_pre_push_regression.ps1`. This wrapper runs Python unit tests, focused Go tests in the pinned Go devcontainer image, focused Java tests in the pinned Java 25 devcontainer image, and then the full HTTP UDM happy/negative smoke suite.
 
 ## Docker Compose
 
@@ -397,9 +429,9 @@ Expected response body:
 }
 ```
 
-## What is still missing
+## Known limitations
 
-This workspace is intentionally a foundation. The following are not implemented yet:
+This workspace is intentionally a development foundation. The following limitations are currently known and accepted:
 
 - Real 3GPP-compliant Milenage or TUAK algorithms.
 - Real Nnrf / Namf interactions.
@@ -410,9 +442,9 @@ This workspace is intentionally a foundation. The following are not implemented 
 - Real PFCP data plane integration.
 - Circuit breaking and tracing between Go and Java services.
 
-## Validation status
+## Validation coverage
 
-Validated in the current environment:
+Operational scenarios are listed in the `Operational contract` section above. Additional coverage confirmed in the current environment:
 
 - C++ networking layer builds and its sample executable runs.
 - Focused Go tests pass in a containerized Go toolchain, including `./internal/api`, `./internal/controlplane`, `./internal/namf`, and `./internal/service`.
@@ -420,16 +452,9 @@ Validated in the current environment:
 - Python automation unit tests pass.
 - IDE diagnostics for the edited Go and Java sources are clean.
 - Docker Compose stack with `mock-nrf` and `mock-udm` starts successfully.
-- `python automation/scripts/smoke_test.py` passes against a freshly started compose stack after explicit readiness checks.
-- `python automation/scripts/smoke_test_http_udm.py` passes against the HTTP UDM mode.
-- `python automation/scripts/smoke_test_http_udm_eap.py` passes against the HTTP UDM EAP mode.
-- `python automation/scripts/smoke_test_http_udm_invalid_notification_uri.py` validates the invalid-notification create path in the same compose environment.
-- `python automation/scripts/smoke_test_http_udm_missing_context.py` validates the missing-context confirmation path in the same compose environment.
-- `python automation/scripts/smoke_test_http_udm_missing_subscriber.py` validates the missing-subscriber initiate path in the same compose environment.
-- `python automation/scripts/smoke_test_http_udm_authentication_rejected.py` validates the authentication-rejected 5G AKA confirmation path in the same compose environment.
-- `python automation/scripts/smoke_test_http_udm_eap_authentication_rejected.py` validates the authentication-rejected EAP confirmation path in the same compose environment.
 - `python automation/scripts/run_http_udm_smoke_suite.py` runs the full HTTP UDM happy/negative smoke suite and cleans the compose stack up afterward.
 - `python automation/scripts/run_full_validation.py` runs the current CI-friendly validation stack end-to-end: Python unit tests, focused Go tests, focused Java tests, and the HTTP UDM smoke suite.
+- `pwsh -File automation/scripts/run_pre_push_regression.ps1` runs the same suite through the Windows-oriented helper wrapper.
 - The HTTP UDM smoke suite validates three happy-path scenarios and the negative create/confirm paths, including mock Namf southbound notifications for both `5G_AKA` and `EAP_AKA_PRIME`.
 
 Not fully validated in the current environment:
