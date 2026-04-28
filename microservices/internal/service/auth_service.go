@@ -93,6 +93,10 @@ func (service *AuthService) CreateUEAuthentication(supi string, servingNetworkNa
 	service.mu.Lock()
 	defer service.mu.Unlock()
 
+	if err := validateRequestedAuthType(authType); err != nil {
+		return AuthContext{}, err
+	}
+
 	response, err := service.controlPlaneClient.Initiate(controlplane.AuthenticationRequest{
 		SUPI:               supi,
 		ServingNetworkName: servingNetworkName,

@@ -48,12 +48,20 @@ func (handler Handler) createUEAuthentication(writer http.ResponseWriter, reques
 	}
 
 	var payload createAuthRequest
-	if err := json.NewDecoder(request.Body).Decode(&payload); err != nil || strings.TrimSpace(payload.SUPI) == "" || strings.TrimSpace(payload.ServingNetworkName) == "" {
+	if err := json.NewDecoder(request.Body).Decode(&payload); err != nil {
+		writeProblem(writer, http.StatusBadRequest, "Invalid request", "request body is invalid", "MALFORMED_REQUEST", request.URL.Path)
+		return
+	}
+	if strings.TrimSpace(payload.SUPI) == "" || strings.TrimSpace(payload.ServingNetworkName) == "" {
 		writeProblem(writer, http.StatusBadRequest, "Invalid request", "supiOrSuci and servingNetworkName are required", "MANDATORY_IE_MISSING", request.URL.Path)
 		return
 	}
 	if !isValidNotificationURI(payload.NotificationURI) {
 		writeProblem(writer, http.StatusBadRequest, "Invalid request", "notificationUri must be an absolute http or https URL", "INVALID_NOTIFICATION_URI", request.URL.Path)
+		return
+	}
+	if !isSupportedAuthType(payload.AuthType) {
+		writeProblem(writer, http.StatusBadRequest, "Invalid request", "authType must be 5G_AKA or EAP_AKA_PRIME when provided", "UNSUPPORTED_AUTH_TYPE", request.URL.Path)
 		return
 	}
 
@@ -169,4 +177,9 @@ func isValidNotificationURI(raw string) bool {
 	}
 
 	return parsed.Scheme == "http" || parsed.Scheme == "https"
+}
+
+func isSupportedAuthType(raw string) bool {
+	raw = strings.TrimSpace(raw)
+	return raw == "" || raw == "5G_AKA" || raw == "EAP_AKA_PRIME"
 }

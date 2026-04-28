@@ -1,17 +1,35 @@
 package service
 
-import "github.com/alexey/ausf/microservices/internal/controlplane"
+import (
+	"strings"
+
+	"github.com/alexey/ausf/microservices/internal/controlplane"
+)
 
 const (
 	contextNotFoundCause            = "CONTEXT_NOT_FOUND"
 	controlPlaneUnavailableCause    = "CONTROL_PLANE_UNAVAILABLE"
 	controlPlaneInitiateFailedCause = "CONTROL_PLANE_INITIATE_FAILED"
 	controlPlaneConfirmFailedCause  = "CONTROL_PLANE_CONFIRMATION_FAILED"
+	unsupportedAuthTypeCause        = "UNSUPPORTED_AUTH_TYPE"
 	authStatusChallengeSent         = "CHALLENGE_SENT"
 	authStatusAuthenticated         = "AUTHENTICATED"
 	authTypeFiveGAka                = "5G_AKA"
 	authTypeEapAkaPrime             = "EAP_AKA_PRIME"
 )
+
+func validateRequestedAuthType(authType string) error {
+	authType = strings.TrimSpace(authType)
+	if authType == "" || authType == authTypeFiveGAka || authType == authTypeEapAkaPrime {
+		return nil
+	}
+
+	return APIError{
+		StatusCode: 400,
+		Message:    "authType must be 5G_AKA or EAP_AKA_PRIME when provided",
+		Cause:      unsupportedAuthTypeCause,
+	}
+}
 
 func contextNotFoundError() APIError {
 	return APIError{StatusCode: 404, Message: "authentication context not found", Cause: contextNotFoundCause}

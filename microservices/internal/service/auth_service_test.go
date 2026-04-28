@@ -135,6 +135,19 @@ func TestCreateUEAuthenticationShouldExposeFiveGAkaLinkForFiveGAka(t *testing.T)
 	}
 }
 
+func TestCreateUEAuthenticationShouldRejectUnsupportedAuthType(t *testing.T) {
+	authService := NewAuthService(stubControlPlaneClient{}, nil)
+
+	_, err := authService.CreateUEAuthentication(
+		"imsi-250010000000001",
+		"5G:mnc001.mcc001.3gppnetwork.org",
+		"AKA_TLS",
+		"",
+	)
+
+	assertAPIError(t, err, http.StatusBadRequest, unsupportedAuthTypeCause, "authType must be 5G_AKA or EAP_AKA_PRIME when provided")
+}
+
 func TestCreateUEAuthenticationShouldExposeEapSessionLinkForEapAkaPrime(t *testing.T) {
 	authService := NewAuthService(stubControlPlaneClient{
 		initiateResponse: controlplane.AuthenticationResponse{
@@ -180,6 +193,27 @@ func TestLookupDeleteAndConfirmShouldShareContextNotFoundError(t *testing.T) {
 
 	_, confirmErr := authService.Confirm("missing", "deadbeef", "")
 	assertAPIError(t, confirmErr, http.StatusNotFound, contextNotFoundCause, "authentication context not found")
+}
+
+func TestDeleteShouldReturnContextNotFoundAfterContextIsRemoved(t *testing.T) {
+	authService := NewAuthService(stubControlPlaneClient{}, nil)
+
+	context, err := authService.CreateUEAuthentication(
+		"imsi-250010000000001",
+		"5G:mnc001.mcc001.3gppnetwork.org",
+		authTypeFiveGAka,
+		"",
+	)
+	if err != nil {
+		t.Fatalf("CreateUEAuthentication() error = %v", err)
+	}
+
+	if err := authService.Delete(context.AuthCtxID); err != nil {
+		t.Fatalf("Delete() error = %v", err)
+	}
+
+	err = authService.Delete(context.AuthCtxID)
+	assertAPIError(t, err, http.StatusNotFound, contextNotFoundCause, "authentication context not found")
 }
 
 func TestConfirmShouldMapControlPlaneAuthenticationRejectedError(t *testing.T) {

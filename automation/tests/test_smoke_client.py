@@ -98,7 +98,8 @@ class _Handler(BaseHTTPRequestHandler):
 class AUSFClientTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
-        cls.server = HTTPServer(("127.0.0.1", 18080), _Handler)
+        cls.server = HTTPServer(("127.0.0.1", 0), _Handler)
+        cls.base_url = f"http://127.0.0.1:{cls.server.server_address[1]}"
         cls.thread = threading.Thread(target=cls.server.serve_forever, daemon=True)
         cls.thread.start()
 
@@ -109,7 +110,7 @@ class AUSFClientTest(unittest.TestCase):
         cls.thread.join(timeout=1)
 
     def test_client_flow(self) -> None:
-        client = AUSFClient("http://127.0.0.1:18080")
+        client = AUSFClient(self.base_url)
 
         health = client.health()
         challenge = client.initiate_authentication("imsi-250010000000001", "5G:mnc001.mcc001.3gppnetwork.org")
@@ -123,7 +124,7 @@ class AUSFClientTest(unittest.TestCase):
         self.assertEqual("SUCCESS", confirmed["authResult"])
 
     def test_eap_aka_prime_flow(self) -> None:
-        client = AUSFClient("http://127.0.0.1:18080")
+        client = AUSFClient(self.base_url)
 
         challenge = client.initiate_authentication(
             "imsi-250010000000002",
@@ -138,7 +139,7 @@ class AUSFClientTest(unittest.TestCase):
         self.assertEqual("SUCCESS", confirmed["authResult"])
 
     def test_problem_details_are_raised(self) -> None:
-        client = AUSFClient("http://127.0.0.1:18080")
+        client = AUSFClient(self.base_url)
 
         with self.assertRaises(AUSFError) as error:
             client.initiate_authentication("bad-request", "5G:mnc001.mcc001.3gppnetwork.org")
@@ -147,7 +148,7 @@ class AUSFClientTest(unittest.TestCase):
         self.assertEqual("Invalid request", error.exception.payload["title"])
 
     def test_notification_uri_is_sent_when_provided(self) -> None:
-        client = AUSFClient("http://127.0.0.1:18080")
+        client = AUSFClient(self.base_url)
 
         client.initiate_authentication(
             "imsi-250010000000001",

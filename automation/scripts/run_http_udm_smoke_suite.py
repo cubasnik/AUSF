@@ -19,6 +19,7 @@ HAPPY_PATH_SCRIPTS = [
 ]
 NEGATIVE_SCRIPTS = [
     "automation/scripts/smoke_test_http_udm_invalid_notification_uri.py",
+    "automation/scripts/smoke_test_http_udm_unsupported_auth_type.py",
     "automation/scripts/smoke_test_http_udm_missing_context.py",
     "automation/scripts/smoke_test_http_udm_missing_subscriber.py",
     "automation/scripts/smoke_test_http_udm_authentication_rejected.py",
@@ -57,7 +58,7 @@ def wait_for_health(url: str, timeout_seconds: int = 60) -> None:
 
 def main() -> int:
     try:
-        run_step(["docker", "compose", "up", "-d"])
+        run_step(["docker", "compose", "up", "--build", "-d"])
         for endpoint in HEALTH_ENDPOINTS:
             wait_for_health(endpoint)
         for script in SMOKE_SCRIPTS:

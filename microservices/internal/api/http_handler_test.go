@@ -65,6 +65,64 @@ func TestCreateUEAuthenticationShouldRejectInvalidNotificationURI(t *testing.T) 
 	}
 }
 
+func TestCreateUEAuthenticationShouldRejectMalformedJSON(t *testing.T) {
+	handler := NewHandler(service.NewAuthService(stubControlPlaneClient{}, nil)).Routes()
+	request := httptest.NewRequest(http.MethodPost, "/nausf-auth/v1/ue-authentications", bytes.NewReader([]byte(`{"supiOrSuci":`)))
+	request.Header.Set("Content-Type", "application/json")
+	response := httptest.NewRecorder()
+
+	handler.ServeHTTP(response, request)
+
+	if response.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusBadRequest)
+	}
+
+	var problem ProblemDetails
+	if err := json.Unmarshal(response.Body.Bytes(), &problem); err != nil {
+		t.Fatalf("Unmarshal() error = %v", err)
+	}
+	if problem.Cause != "MALFORMED_REQUEST" {
+		t.Fatalf("cause = %s, want MALFORMED_REQUEST", problem.Cause)
+	}
+	if problem.Detail != "request body is invalid" {
+		t.Fatalf("detail = %s, want request body is invalid", problem.Detail)
+	}
+}
+
+func TestCreateUEAuthenticationShouldRejectUnsupportedAuthType(t *testing.T) {
+	handler := NewHandler(service.NewAuthService(stubControlPlaneClient{}, nil)).Routes()
+	payload := map[string]string{
+		"supiOrSuci":         "imsi-250010000000001",
+		"servingNetworkName": "5G:mnc001.mcc001.3gppnetwork.org",
+		"authType":           "AKA_TLS",
+	}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("Marshal() error = %v", err)
+	}
+
+	request := httptest.NewRequest(http.MethodPost, "/nausf-auth/v1/ue-authentications", bytes.NewReader(body))
+	request.Header.Set("Content-Type", "application/json")
+	response := httptest.NewRecorder()
+
+	handler.ServeHTTP(response, request)
+
+	if response.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusBadRequest)
+	}
+
+	var problem ProblemDetails
+	if err := json.Unmarshal(response.Body.Bytes(), &problem); err != nil {
+		t.Fatalf("Unmarshal() error = %v", err)
+	}
+	if problem.Cause != "UNSUPPORTED_AUTH_TYPE" {
+		t.Fatalf("cause = %s, want UNSUPPORTED_AUTH_TYPE", problem.Cause)
+	}
+	if problem.Detail != "authType must be 5G_AKA or EAP_AKA_PRIME when provided" {
+		t.Fatalf("detail = %s, want authType must be 5G_AKA or EAP_AKA_PRIME when provided", problem.Detail)
+	}
+}
+
 func TestCreateUEAuthenticationShouldAcceptAbsoluteNotificationURI(t *testing.T) {
 	handler := NewHandler(service.NewAuthService(stubControlPlaneClient{}, nil)).Routes()
 	payload := map[string]string{
