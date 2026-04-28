@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/devcontainers/java:25-jdk-bookworm AS builder
+FROM mcr.microsoft.com/devcontainers/java:25-jdk-bookworm AS java-test-base
 
 WORKDIR /app
 
@@ -6,6 +6,8 @@ RUN rm -f /etc/apt/sources.list.d/yarn.list /etc/apt/sources.list.d/yarn.sources
 	&& apt-get update \
 	&& apt-get install -y --no-install-recommends maven \
 	&& rm -rf /var/lib/apt/lists/*
+
+FROM java-test-base AS builder
 
 COPY pom.xml ./
 COPY src ./src

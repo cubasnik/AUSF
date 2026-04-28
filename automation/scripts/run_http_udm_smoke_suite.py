@@ -12,15 +12,19 @@ from urllib.error import URLError
 
 ROOT = Path(__file__).resolve().parents[2]
 PYTHON = sys.executable
-SMOKE_SCRIPTS = [
+HAPPY_PATH_SCRIPTS = [
+    "automation/scripts/smoke_test.py",
     "automation/scripts/smoke_test_http_udm.py",
     "automation/scripts/smoke_test_http_udm_eap.py",
+]
+NEGATIVE_SCRIPTS = [
     "automation/scripts/smoke_test_http_udm_invalid_notification_uri.py",
     "automation/scripts/smoke_test_http_udm_missing_context.py",
     "automation/scripts/smoke_test_http_udm_missing_subscriber.py",
     "automation/scripts/smoke_test_http_udm_authentication_rejected.py",
     "automation/scripts/smoke_test_http_udm_eap_authentication_rejected.py",
 ]
+SMOKE_SCRIPTS = HAPPY_PATH_SCRIPTS + NEGATIVE_SCRIPTS
 HEALTH_ENDPOINTS = [
     "http://127.0.0.1:8090/healthz",
     "http://127.0.0.1:8091/healthz",

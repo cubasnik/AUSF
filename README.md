@@ -268,6 +268,7 @@ python scripts/run_full_validation.py
 
 The HTTP UDM smoke coverage is split by auth mode:
 
+- `python automation/scripts/smoke_test.py` validates the base AUSF happy path against a freshly started compose stack and now waits for service readiness before initiating authentication.
 - `python automation/scripts/smoke_test_http_udm.py` validates the `5G_AKA` flow and Namf callback path.
 - `python automation/scripts/smoke_test_http_udm_eap.py` validates the `EAP_AKA_PRIME` flow through the dedicated `eap-session` confirmation subresource and the same Namf callback path.
 - `python automation/scripts/smoke_test_http_udm_invalid_notification_uri.py` validates the negative create path, asserting `400` with `cause=INVALID_NOTIFICATION_URI` and no Namf callback for a relative `notificationUri`.
@@ -287,6 +288,7 @@ make microservices-build
 make automation-test
 make http-udm-smoke-suite
 make validate-all
+make regression-suite
 make compose-up
 make compose-refresh-mocks
 ```
@@ -295,9 +297,9 @@ If you work on Windows without `make`, use Git Bash, MSYS2, WSL, or run the equi
 
 For the bind-mounted Python mock services, a plain `docker compose up -d` does not restart an already running container, so code changes in `mock-amf` or `mock-nrf` may not be picked up immediately. Use `make compose-refresh-mocks` or run `pwsh -File automation/scripts/refresh_mock_services.ps1` to force a clean stop/remove/recreate cycle for those two services.
 
-To run the full HTTP UDM happy/negative validation set in one shot, use `make http-udm-smoke-suite` or `python automation/scripts/run_http_udm_smoke_suite.py`. The suite brings the compose stack up, runs all HTTP UDM smoke scenarios sequentially, and always tears the stack down at the end.
+To run the full HTTP UDM happy/negative validation set in one shot, use `make http-udm-smoke-suite` or `python automation/scripts/run_http_udm_smoke_suite.py`. The suite brings the compose stack up, runs three happy-path smoke scenarios (`smoke_test.py`, `smoke_test_http_udm.py`, `smoke_test_http_udm_eap.py`), then the negative HTTP UDM scenarios, and always tears the stack down at the end.
 
-To run the current CI-friendly validation set in one shot, use `make validate-all` or `python automation/scripts/run_full_validation.py`. This wrapper runs Python unit tests, focused Go tests in the pinned Go devcontainer image, focused Java tests in the pinned Java 25 devcontainer image, and then the full HTTP UDM happy/negative smoke suite.
+To run the current minimal reproducible pre-push regression suite in one shot, use `make regression-suite`, `make validate-all`, or `python automation/scripts/run_full_validation.py`. This wrapper runs Python unit tests, focused Go tests in the pinned Go devcontainer image, focused Java tests in the pinned Java 25 devcontainer image, and then the full HTTP UDM happy/negative smoke suite.
 
 ## Docker Compose
 
@@ -418,6 +420,7 @@ Validated in the current environment:
 - Python automation unit tests pass.
 - IDE diagnostics for the edited Go and Java sources are clean.
 - Docker Compose stack with `mock-nrf` and `mock-udm` starts successfully.
+- `python automation/scripts/smoke_test.py` passes against a freshly started compose stack after explicit readiness checks.
 - `python automation/scripts/smoke_test_http_udm.py` passes against the HTTP UDM mode.
 - `python automation/scripts/smoke_test_http_udm_eap.py` passes against the HTTP UDM EAP mode.
 - `python automation/scripts/smoke_test_http_udm_invalid_notification_uri.py` validates the invalid-notification create path in the same compose environment.
@@ -427,7 +430,7 @@ Validated in the current environment:
 - `python automation/scripts/smoke_test_http_udm_eap_authentication_rejected.py` validates the authentication-rejected EAP confirmation path in the same compose environment.
 - `python automation/scripts/run_http_udm_smoke_suite.py` runs the full HTTP UDM happy/negative smoke suite and cleans the compose stack up afterward.
 - `python automation/scripts/run_full_validation.py` runs the current CI-friendly validation stack end-to-end: Python unit tests, focused Go tests, focused Java tests, and the HTTP UDM smoke suite.
-- The HTTP UDM smoke suite validates mock Namf southbound notification paths for both `5G_AKA` and `EAP_AKA_PRIME`, and confirms the negative create/confirm paths do not emit stray callbacks.
+- The HTTP UDM smoke suite validates three happy-path scenarios and the negative create/confirm paths, including mock Namf southbound notifications for both `5G_AKA` and `EAP_AKA_PRIME`.
 
 Not fully validated in the current environment:
 

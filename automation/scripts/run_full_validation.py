@@ -8,7 +8,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 PYTHON = sys.executable
 GO_IMAGE = "mcr.microsoft.com/devcontainers/go:1-1.22-bookworm"
-JAVA_IMAGE = "mcr.microsoft.com/devcontainers/java:25-jdk-bookworm"
+JAVA_TEST_IMAGE = "ausf-control-plane-test-base:java25"
 GO_TEST_PACKAGES = [
     "./internal/api",
     "./internal/controlplane",
@@ -27,6 +27,21 @@ def run_step(name: str, command: list[str]) -> None:
     print(f"==> {name}", flush=True)
     print(f"    {' '.join(command)}", flush=True)
     subprocess.run(command, cwd=ROOT, check=True)
+
+
+def ensure_java_test_image() -> None:
+    run_step(
+        "Build cached Java test image",
+        [
+            "docker",
+            "build",
+            "-t",
+            JAVA_TEST_IMAGE,
+            "--target",
+            "java-test-base",
+            "control-plane",
+        ],
+    )
 
 
 def main() -> int:
@@ -52,6 +67,8 @@ def main() -> int:
         ],
     )
 
+    ensure_java_test_image()
+
     run_step(
         "Java focused tests in container",
         [
@@ -62,12 +79,9 @@ def main() -> int:
             f"{(ROOT / 'control-plane').resolve()}:/app",
             "-w",
             "/app",
-            JAVA_IMAGE,
+            JAVA_TEST_IMAGE,
             "bash",
             "-lc",
-            "rm -f /etc/apt/sources.list.d/yarn.list /etc/apt/sources.list.d/yarn.sources && "
-            "apt-get update >/dev/null && "
-            "apt-get install -y --no-install-recommends maven >/dev/null && "
             f"mvn -q -Dtest={','.join(JAVA_TESTS)} test",
         ],
     )
