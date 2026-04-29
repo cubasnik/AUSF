@@ -16,8 +16,11 @@ The project is a working foundation, not a complete production AUSF. It currentl
 - C++ PFCP/networking sample with buildable CMake target.
 - Java control-plane service with mock UDM/ARPF logic and file-backed subscriber storage.
 - Go AUSF microservice exposing a concrete `nausf-auth` style API and delegating challenge/confirmation to Java.
-- Python automation client and smoke-test helpers for the Go service contract.
+- Auth context TTL expiration: contexts are automatically invalidated after a configurable number of seconds (`AUSF_AUTH_CONTEXT_TTL_SECONDS`). Expired contexts return `404 CONTEXT_NOT_FOUND`.
+- Optional file-backed auth context persistence (`AUSF_AUTH_CONTEXT_STORE_FILE`): a running AUSF can reload its in-flight contexts after a restart, allowing confirmation to succeed even after a container restart.
+- Python automation client and smoke-test helpers for the Go service contract, including context persistence and TTL scenarios.
 - Root orchestration via `Makefile` and container startup via `docker-compose.yml`.
+- Branch protection on `main` requires the `validate` CI check to pass before any PR can be merged.
 
 ## Implemented AUSF flow
 
@@ -145,6 +148,9 @@ Additional route behavior:
 | Missing subscriber negative path | `python automation/scripts/smoke_test_http_udm_missing_subscriber.py` | `404 SUBSCRIBER_NOT_FOUND`; no Namf callback |
 | `5G_AKA` authentication rejection | `python automation/scripts/smoke_test_http_udm_authentication_rejected.py` | `401 AUTHENTICATION_REJECTED`; no Namf callback |
 | `EAP_AKA_PRIME` authentication rejection | `python automation/scripts/smoke_test_http_udm_eap_authentication_rejected.py` | `401 AUTHENTICATION_REJECTED`; no Namf callback |
+| Auth context survives Go service restart | `python automation/scripts/smoke_test_http_udm_context_survives_restart.py` | Challenge created, Go container restarted, confirmation succeeds using the file-backed context store |
+| Auth context TTL expiration | `python automation/scripts/smoke_test_http_udm_context_ttl_expired.py` | Challenge created with short TTL, wait for expiry, confirmation returns `404 CONTEXT_NOT_FOUND` |
+| Upstream UDM unavailable | `python automation/scripts/smoke_test_http_udm_upstream_unavailable.py` | Create request for `imsi-250010000000503` returns `502 CONTROL_PLANE_UNAVAILABLE` |
 
 ### Endpoint to validation matrix
 
@@ -177,9 +183,27 @@ AUSF/
 ├── automation/
 │   ├── requirements.txt
 │   ├── scripts/
-│   │   └── smoke_test.py
+│   │   ├── smoke_test.py
+│   │   ├── smoke_test_http_udm.py
+│   │   ├── smoke_test_http_udm_eap.py
+│   │   ├── smoke_test_http_udm_invalid_notification_uri.py
+│   │   ├── smoke_test_http_udm_missing_context.py
+│   │   ├── smoke_test_http_udm_missing_subscriber.py
+│   │   ├── smoke_test_http_udm_authentication_rejected.py
+│   │   ├── smoke_test_http_udm_eap_authentication_rejected.py
+│   │   ├── smoke_test_http_udm_context_survives_restart.py
+│   │   ├── smoke_test_http_udm_context_ttl_expired.py
+│   │   ├── smoke_test_http_udm_upstream_unavailable.py
+│   │   ├── run_http_udm_smoke_suite.py
+│   │   ├── run_full_validation.py
+│   │   ├── run_ttl_smoke_only.py
+│   │   ├── run_fast_validation.ps1
+│   │   ├── run_pre_push_regression.ps1
+│   │   └── refresh_mock_services.ps1
 │   ├── src/
-│   │   └── smoke_client.py
+│   │   ├── compose_runtime.py
+│   │   ├── smoke_client.py
+│   │   └── smoke_runtime.py
 │   └── tests/
 │       └── test_smoke_client.py
 ├── control-plane/
@@ -228,6 +252,7 @@ AUSF/
 │       ├── controlplane/
 │       │   └── client.go
 │       └── service/
+│           ├── auth_context_store.go
 │           └── auth_service.go
 ├── networking/
 │   ├── CMakeLists.txt
@@ -308,8 +333,12 @@ python scripts/smoke_test_http_udm_missing_context.py
 python scripts/smoke_test_http_udm_missing_subscriber.py
 python scripts/smoke_test_http_udm_authentication_rejected.py
 python scripts/smoke_test_http_udm_eap_authentication_rejected.py
+python scripts/smoke_test_http_udm_context_survives_restart.py
+python scripts/smoke_test_http_udm_context_ttl_expired.py
+python scripts/smoke_test_http_udm_upstream_unavailable.py
 python scripts/run_http_udm_smoke_suite.py
 python scripts/run_full_validation.py
+pwsh -File scripts/run_fast_validation.ps1
 pwsh -File scripts/run_pre_push_regression.ps1
 ```
 
@@ -404,6 +433,8 @@ Important runtime variables:
 - `AUSF_UDM_BASE_URL` points the control-plane directly at an external UDM when `AUSF_UDM_MODE=http`.
 - `AUSF_NNRF_BASE_URL` points the control-plane at an external NRF discovery service when the UDM location should be resolved dynamically.
 - `AUSF_NAMF_BASE_URL` points the Go AUSF service at an AMF-facing status notification endpoint.
+- `AUSF_AUTH_CONTEXT_STORE_FILE` (optional) sets the path to a JSON file where the Go AUSF service persists in-flight auth contexts. When set, contexts survive a container restart. When unset, contexts are stored in-memory only.
+- `AUSF_AUTH_CONTEXT_TTL_SECONDS` (optional, default unlimited) sets the TTL in seconds for auth contexts. Contexts older than this value are treated as expired and return `404 CONTEXT_NOT_FOUND`.
 
 When `notificationUri` is provided on the create request, the Go AUSF service uses that per-session callback template in preference to the global `AUSF_NAMF_BASE_URL`. The `{authCtxId}` placeholder is replaced with the generated authentication context identifier before the Namf callback is sent.
 
@@ -496,13 +527,52 @@ Operational scenarios are listed in the `Operational contract` section above. Ad
 - Focused Java tests pass in a containerized Java/Maven toolchain, including `AuthenticationManagerTest`, `AuthenticationControllerTest`, `NnrfClientTest`, and `HttpUdmClientTest`.
 - Python automation unit tests pass.
 - IDE diagnostics for the edited Go and Java sources are clean.
-- Docker Compose stack with `mock-nrf` and `mock-udm` starts successfully.
+- Docker Compose stack with `mock-nrf`, `mock-udm`, and `mock-amf` starts successfully.
+- Auth context TTL expiration smoke validated end-to-end: context created, TTL elapsed, confirmation returns `404 CONTEXT_NOT_FOUND`.
+- Auth context file-backed persistence smoke validated: context survives a Go container restart, confirmation succeeds after restart.
+- Upstream-unavailable smoke validated: `imsi-250010000000503` triggers `502 CONTROL_PLANE_UNAVAILABLE` via `MOCK_UDM_UNAVAILABLE_SUPIS`.
 - `python automation/scripts/run_http_udm_smoke_suite.py` runs the full HTTP UDM happy/negative smoke suite and cleans the compose stack up afterward.
 - `python automation/scripts/run_full_validation.py` runs the current CI-friendly validation stack end-to-end: Python unit tests, focused Go tests, focused Java tests, and the HTTP UDM smoke suite.
 - `pwsh -File automation/scripts/run_pre_push_regression.ps1` runs the same suite through the Windows-oriented helper wrapper.
-- The HTTP UDM smoke suite validates three happy-path scenarios and the negative create/confirm paths, including mock Namf southbound notifications for both `5G_AKA` and `EAP_AKA_PRIME`.
+- `.github/workflows/regression-suite.yml` enforces the same `validate` job on every `push` and `pull_request`. The `main` branch is protected: merging requires one approved review, resolved conversations, and a passing `validate` status check.
 
 Not fully validated in the current environment:
 
 - Full end-to-end validation of every branch and failure mode has not been run.
 - Host-native `go` and `mvn` commands were not used directly; validation was performed through containerized toolchains.
+
+## Roadmap
+
+The backlog below is ordered by priority. Items are grouped into three horizons.
+
+### Horizon 1 — correctness and production-readiness (next sprint)
+
+| # | Item | Layer | Why |
+|---|------|-------|-----|
+| 1 | Replace development crypto with real Milenage/TUAK | Java control-plane | Current RAND/AUTN/RES\* generation is not standards-compliant; needed before any interop testing |
+| 2 | Replace JSON file storage with a persistent database (e.g. PostgreSQL or embedded H2) | Java control-plane | File-backed subscriber store does not survive concurrent writes or horizontal scale-out |
+| 3 | Add TLS between services and toward external NFs | Go + Java | Required by 3GPP SBI specifications; currently all traffic is plain HTTP |
+| 4 | Add OAuth2/token-based SBI authorization | Go microservice | 3GPP TS 33.501 mandates NF-level authorization on SBI interfaces |
+| 5 | Implement full 5G AKA state machine (including SYNC\_FAILURE and re-sync) | Go + Java | Current flow only covers the happy path and simple rejection; missing AUTN failure handling |
+| 6 | Implement full EAP-AKA' state machine (EAP-Failure, re-auth, fast re-auth) | Go + Java | Current EAP flow only covers the initial challenge/response exchange |
+
+### Horizon 2 — resilience and observability (following sprint)
+
+| # | Item | Layer | Why |
+|---|------|-------|-----|
+| 7 | Add circuit breaker (e.g. `failsafe-go` or Resilience4j) between Go↔Java and Java↔UDM | Go + Java | Prevent cascade failures; required for the `502 CONTROL_PLANE_UNAVAILABLE` path to be reliably bounded |
+| 8 | Add distributed tracing (OpenTelemetry) | Go + Java | Correlate requests across the three-service boundary for debugging and SLA monitoring |
+| 9 | Add Prometheus metrics endpoint (`/metrics`) | Go microservice | Expose request rates, latency histograms, and auth-result counters |
+| 10 | Add structured JSON logging with trace-ID propagation | Go + Java | Replace unstructured log lines with machine-parseable entries |
+| 11 | Harden auth context TTL: persist TTL metadata across restarts and test boundary conditions | Go microservice | Current TTL is computed from in-memory creation time; a restarted service loses the original creation timestamp |
+
+### Horizon 3 — integration and deployment
+
+| # | Item | Layer | Why |
+|---|------|-------|-----|
+| 12 | Production-grade NRF integration: heartbeat registration, NF profile, subscription-based UDM discovery | Java control-plane | Replace the current single-shot `GET /nnrf-disc` call with a proper NRF lifecycle |
+| 13 | Production-grade Nudm interoperability (full `Nudm_UEAuthentication` contract) | Java control-plane | Current mock UDM contract is simplified; real UDM response shapes differ |
+| 14 | Real PFCP data plane integration in the C++ networking layer | C++ | Current PFCP code is a stub; connecting it to the authentication result flow closes the user-plane loop |
+| 15 | Kubernetes/Helm deployment manifests with readiness/liveness probes | Infrastructure | Enable deployment to a 5G core lab cluster |
+| 16 | Load and soak testing with realistic SUPI populations | Automation | Verify throughput, TTL under concurrent load, and file-store write performance |
+| 17 | Devcontainer-based one-click local setup | Infrastructure | Remove dependency on pre-installed Docker/Maven/Go versions on developer machines |
