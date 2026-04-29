@@ -3,13 +3,16 @@ package config
 import (
 	"fmt"
 	"os"
+	"strconv"
 )
 
 type Config struct {
-	Host                string
-	Port                string
-	ControlPlaneBaseURL string
-	NamfBaseURL         string
+	Host                  string
+	Port                  string
+	ControlPlaneBaseURL   string
+	NamfBaseURL           string
+	AuthContextStoreFile  string
+	AuthContextTTLSeconds int
 }
 
 func Load() Config {
@@ -29,8 +32,19 @@ func Load() Config {
 	}
 
 	namfBaseURL := os.Getenv("AUSF_NAMF_BASE_URL")
+	authContextStoreFile := os.Getenv("AUSF_AUTH_CONTEXT_STORE_FILE")
+	if authContextStoreFile == "" {
+		authContextStoreFile = "/tmp/ausf-auth-contexts.json"
+	}
 
-	return Config{Host: host, Port: port, ControlPlaneBaseURL: controlPlaneBaseURL, NamfBaseURL: namfBaseURL}
+	authContextTTLSeconds := 900
+	if rawTTL := os.Getenv("AUSF_AUTH_CONTEXT_TTL_SECONDS"); rawTTL != "" {
+		if parsedTTL, err := strconv.Atoi(rawTTL); err == nil && parsedTTL > 0 {
+			authContextTTLSeconds = parsedTTL
+		}
+	}
+
+	return Config{Host: host, Port: port, ControlPlaneBaseURL: controlPlaneBaseURL, NamfBaseURL: namfBaseURL, AuthContextStoreFile: authContextStoreFile, AuthContextTTLSeconds: authContextTTLSeconds}
 }
 
 func (config Config) Address() string {

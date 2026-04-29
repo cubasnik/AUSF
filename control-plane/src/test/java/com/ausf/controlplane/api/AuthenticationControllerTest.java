@@ -2,6 +2,7 @@ package com.ausf.controlplane.api;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static java.util.Objects.requireNonNull;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -11,8 +12,8 @@ import com.ausf.controlplane.authentication.AuthenticationResponse;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.mockito.Mockito.when;
@@ -22,7 +23,7 @@ class AuthenticationControllerTest {
     @Autowired
     private MockMvc mockMvc;
 
-    @MockBean
+    @MockitoBean
     private AuthenticationManager authenticationManager;
 
     @Test
@@ -31,7 +32,7 @@ class AuthenticationControllerTest {
             .thenReturn(AuthenticationResponse.failure("subscriber not found in UDM storage", "SUBSCRIBER_NOT_FOUND"));
 
         mockMvc.perform(post("/control-plane/v1/auth/initiate")
-                .contentType(MediaType.APPLICATION_JSON)
+            .contentType(requireNonNull(MediaType.APPLICATION_JSON))
                 .content("""
                     {
                       "supi": "imsi-250019999999999",
@@ -44,12 +45,30 @@ class AuthenticationControllerTest {
     }
 
     @Test
+    void shouldReturnBadGatewayWhenInitiateCannotReachUpstreamAuthenticationSource() throws Exception {
+        when(authenticationManager.initiateAuthentication(eq("imsi-250010000000503"), any(), any()))
+            .thenReturn(AuthenticationResponse.failure("UDM request failed: 503 Service Unavailable", "CONTROL_PLANE_UNAVAILABLE"));
+
+        mockMvc.perform(post("/control-plane/v1/auth/initiate")
+            .contentType(requireNonNull(MediaType.APPLICATION_JSON))
+                .content("""
+                    {
+                      "supi": "imsi-250010000000503",
+                      "servingNetworkName": "5G:mnc001.mcc001.3gppnetwork.org",
+                      "authType": "5G_AKA"
+                    }
+                    """))
+            .andExpect(status().isBadGateway())
+            .andExpect(jsonPath("$.errorCode").value("CONTROL_PLANE_UNAVAILABLE"));
+    }
+
+    @Test
     void shouldReturnNotFoundWhenConfirmationContextIsMissing() throws Exception {
         when(authenticationManager.verifyAuthenticationResponse(eq("missing"), any(), any()))
             .thenReturn(AuthenticationResponse.failure("authentication context missing or expired", "CONTEXT_NOT_FOUND"));
 
         mockMvc.perform(post("/control-plane/v1/auth/missing/confirm")
-                .contentType(MediaType.APPLICATION_JSON)
+            .contentType(requireNonNull(MediaType.APPLICATION_JSON))
                 .content("""
                     {
                       "resStar": "deadbeef"
@@ -65,7 +84,7 @@ class AuthenticationControllerTest {
             .thenReturn(AuthenticationResponse.failure("RES* verification failed", "AUTHENTICATION_REJECTED"));
 
         mockMvc.perform(post("/control-plane/v1/auth/imsi-250010000000001/confirm")
-                .contentType(MediaType.APPLICATION_JSON)
+            .contentType(requireNonNull(MediaType.APPLICATION_JSON))
                 .content("""
                     {
                       "resStar": "deadbeef"

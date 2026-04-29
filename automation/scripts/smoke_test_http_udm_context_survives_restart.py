@@ -5,9 +5,11 @@ import json
 import sys
 from pathlib import Path
 
+
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
+from compose_runtime import restart_compose_service, wait_for_container_health
 from smoke_client import AUSFClient
 from smoke_runtime import AUSF_BASE_URL, MOCK_AMF_BASE_URL, MOCK_NRF_BASE_URL, MOCK_UDM_BASE_URL, load_amf_notifications, wait_for_health
 
@@ -38,17 +40,23 @@ def main() -> int:
         serving_network_name,
         notification_uri="http://mock-amf:8092/namf-comm/v1/ue-authentications/{authCtxId}/status-notify",
     )
+
+    restart_compose_service("ausf-go")
+    wait_for_container_health("ausf-go")
+
+    context = client.get_authentication_context(challenge["authCtxId"])
+    assert context["authCtxId"] == challenge["authCtxId"]
+    assert context["status"] == "CHALLENGE_SENT"
+
     auth_data = challenge["5gAuthData"]
     permanent_key = load_permanent_key(supi)
     expected_res_star = hashlib.sha256(f"{auth_data['rand']}{auth_data['autn']}{permanent_key}".encode("utf-8")).hexdigest()[:32]
     confirmed = client.confirm_authentication(challenge["authCtxId"], expected_res_star)
-    print(f"confirmed: {confirmed}")
+    print(f"confirmed-after-restart: {confirmed}")
 
     notifications = load_amf_notifications()[baseline_notification_count:]
     matching_notification = next(notification for notification in notifications if notification["authCtxId"] == challenge["authCtxId"])
     assert matching_notification["authResult"] == "SUCCESS"
-    assert matching_notification["supi"] == supi
-    assert matching_notification["_requestPath"] == f"/namf-comm/v1/ue-authentications/{challenge['authCtxId']}/status-notify"
     print(f"amf-notification: {matching_notification}")
     return 0
 

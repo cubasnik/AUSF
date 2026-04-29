@@ -1,5 +1,6 @@
 package com.ausf.controlplane.udm;
 
+import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Supplier;
 import org.springframework.beans.factory.annotation.Value;
@@ -34,9 +35,9 @@ public class HttpUdmClient implements UdmClient {
     @Override
     public Optional<UdmAuthenticationData> getAuthenticationData(String supi, String servingNetworkName, String authType) {
         try {
-            UdmGenerateAuthDataResponse response = executeWithRetry(() -> restClientBuilder.baseUrl(resolveBaseUrl()).build().post()
+            UdmGenerateAuthDataResponse response = executeWithRetry(() -> restClientBuilder.baseUrl(Objects.requireNonNull(resolveBaseUrl())).build().post()
                 .uri("/nudm-ueau/v1/{supi}/security-information/generate-auth-data", supi)
-                .contentType(MediaType.APPLICATION_JSON)
+                .contentType(Objects.requireNonNull(MediaType.APPLICATION_JSON))
                 .body(new UdmGenerateAuthDataRequest(servingNetworkName, authType))
                 .retrieve()
                 .body(UdmGenerateAuthDataResponse.class));
@@ -99,8 +100,10 @@ public class HttpUdmClient implements UdmClient {
                 sleepBeforeRetry(attempt);
             }
         }
-
-        throw lastException;
+        throw new IllegalStateException(
+            "UDM request failed: " + (lastException == null ? "unknown error" : lastException.getMessage()),
+            lastException
+        );
     }
 
     private boolean shouldRetry(RestClientException exception) {

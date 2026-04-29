@@ -54,6 +54,7 @@ services:
       start_period: 2s
 
   ausf-go:
+    image: ausf-ausf-go:latest
     build:
       context: ./microservices
       dockerfile: Dockerfile
@@ -63,6 +64,8 @@ services:
       AUSF_PORT: 8080
       CONTROL_PLANE_BASE_URL: http://ausf-control-plane:8081
       AUSF_NAMF_BASE_URL: http://mock-amf:8092
+      AUSF_AUTH_CONTEXT_STORE_FILE: /tmp/ausf-auth-contexts.json
+      AUSF_AUTH_CONTEXT_TTL_SECONDS: 900
     ports:
       - "8080:8080"
     depends_on:
@@ -78,6 +81,7 @@ services:
       start_period: 5s
 
   ausf-control-plane:
+    image: ausf-ausf-control-plane:latest
     build:
       context: ./control-plane
       dockerfile: Dockerfile

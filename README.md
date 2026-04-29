@@ -313,6 +313,36 @@ python scripts/run_full_validation.py
 pwsh -File scripts/run_pre_push_regression.ps1
 ```
 
+From the repository root, the shortest one-command validation entrypoint is:
+
+```bash
+make validate-fast
+```
+
+`make validate-fast` is the canonical make entrypoint for local validation. On Windows, that target delegates to the PowerShell wrapper `automation/scripts/run_fast_validation.ps1`, so the same fast runner is used by both `make validate-fast` and direct PowerShell execution. The shared runner then executes the optimized full validation workflow in `automation/scripts/run_full_validation.py`. When host Maven is available, it reuses the fast path that packages the Java runtime JAR on the host, prebuilds the `ausf-control-plane` and `ausf-go` runtime images, and then runs the HTTP UDM smoke suite with `--skip-build`.
+
+On Windows hosts where `make` is not available in `PATH`, use:
+
+```powershell
+pwsh -File automation/scripts/run_fast_validation.ps1
+```
+
+If you only need to rerun the compose-backed smoke suite after those images are already prepared, use:
+
+```bash
+python automation/scripts/run_http_udm_smoke_suite.py --skip-build
+```
+
+If you only need the TTL-expiration verification (without the rest of the smoke matrix), use:
+
+```bash
+make smoke-ttl-only
+```
+
+`make smoke-ttl-only` rebuilds `ausf-go`, starts compose without extra rebuilds, runs `automation/scripts/smoke_test_http_udm_context_ttl_expired.py`, and then tears the stack down.
+
+`make validate-all` remains available as a backward-compatible alias for the same full workflow.
+
 The HTTP UDM smoke coverage is split by auth mode:
 
 - `python automation/scripts/smoke_test.py` validates the base AUSF happy path against a freshly started compose stack and now waits for service readiness before initiating authentication.

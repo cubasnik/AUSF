@@ -1,6 +1,7 @@
 package com.ausf.controlplane.udm;
 
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -29,7 +30,7 @@ public class NnrfClient {
         RestClientException lastException = null;
         for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
             try {
-                NnrfDiscoveryResponse response = restClientBuilder.baseUrl(baseUrl).build().get()
+                NnrfDiscoveryResponse response = restClientBuilder.baseUrl(Objects.requireNonNull(baseUrl)).build().get()
                     .uri(uriBuilder -> uriBuilder
                         .path("/nnrf-disc/v1/nf-instances")
                         .queryParam("target-nf-type", "UDM")
@@ -61,8 +62,10 @@ public class NnrfClient {
                 sleepBeforeRetry(attempt);
             }
         }
-
-        throw new IllegalStateException("NRF discovery failed: " + lastException.getMessage(), lastException);
+        throw new IllegalStateException(
+            "NRF discovery failed: " + (lastException == null ? "unknown error" : lastException.getMessage()),
+            lastException
+        );
     }
 
     private String sanitizeBaseUrl(String value) {

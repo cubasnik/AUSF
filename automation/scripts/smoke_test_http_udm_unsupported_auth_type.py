@@ -2,45 +2,24 @@ from __future__ import annotations
 
 import json
 import sys
-import time
-from http.client import RemoteDisconnected
 from pathlib import Path
-from urllib import request
-from urllib.error import URLError
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from smoke_client import AUSFClient, AUSFError
-
-
-def wait_for_health(url: str, timeout_seconds: int = 30) -> dict:
-	deadline = time.time() + timeout_seconds
-	last_error: Exception | None = None
-	while time.time() < deadline:
-		try:
-			with request.urlopen(url, timeout=5) as response:
-				return json.loads(response.read().decode("utf-8"))
-		except (URLError, TimeoutError, json.JSONDecodeError, RemoteDisconnected) as error:
-			last_error = error
-			time.sleep(1)
-	raise RuntimeError(f"timed out waiting for {url}: {last_error}")
-
-
-def load_amf_notifications() -> list[dict]:
-	with request.urlopen("http://127.0.0.1:8092/notifications", timeout=5) as response:
-		return json.loads(response.read().decode("utf-8"))["notifications"]
+from smoke_runtime import AUSF_BASE_URL, MOCK_AMF_BASE_URL, MOCK_NRF_BASE_URL, MOCK_UDM_BASE_URL, load_amf_notifications, wait_for_health
 
 
 def main() -> int:
 	supi = "imsi-250010000000001"
 	serving_network_name = "5G:mnc001.mcc001.3gppnetwork.org"
 
-	print(f"nrf-health: {wait_for_health('http://127.0.0.1:8091/healthz')}")
-	print(f"udm-health: {wait_for_health('http://127.0.0.1:8090/healthz')}")
-	print(f"amf-health: {wait_for_health('http://127.0.0.1:8092/healthz')}")
+	print(f"nrf-health: {wait_for_health(f'{MOCK_NRF_BASE_URL}/healthz')}")
+	print(f"udm-health: {wait_for_health(f'{MOCK_UDM_BASE_URL}/healthz')}")
+	print(f"amf-health: {wait_for_health(f'{MOCK_AMF_BASE_URL}/healthz')}")
 
-	client = AUSFClient("http://127.0.0.1:8080")
+	client = AUSFClient(AUSF_BASE_URL)
 	print(f"ausf-health: {client.health()}")
 	baseline_notification_count = len(load_amf_notifications())
 

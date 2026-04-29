@@ -3,6 +3,7 @@ package com.ausf.controlplane.udm;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static java.util.Objects.requireNonNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -29,7 +30,7 @@ class HttpUdmClientTest {
         HttpUdmClient client = new HttpUdmClient(builder, nnrfClient, "http://mock-udm:8090/");
 
         server.expect(requestTo("http://mock-udm:8090/nudm-ueau/v1/imsi-250010000000001/security-information/generate-auth-data"))
-            .andExpect(method(POST))
+            .andExpect(method(requireNonNull(POST)))
             .andExpect(content().json("""
                 {
                   "servingNetworkName": "5G:mnc001.mcc001.3gppnetwork.org",
@@ -74,7 +75,7 @@ class HttpUdmClientTest {
         HttpUdmClient client = new HttpUdmClient(builder, nnrfClient, "");
 
         server.expect(requestTo("http://mock-udm:8090/nudm-ueau/v1/imsi-250010000000002/security-information/generate-auth-data"))
-            .andExpect(method(POST))
+            .andExpect(method(requireNonNull(POST)))
             .andRespond(withSuccess(
                 """
                 {
@@ -110,10 +111,10 @@ class HttpUdmClientTest {
         HttpUdmClient client = new HttpUdmClient(builder, nnrfClient, "http://mock-udm:8090");
 
         server.expect(requestTo("http://mock-udm:8090/nudm-ueau/v1/imsi-250010000000001/security-information/generate-auth-data"))
-            .andExpect(method(POST))
+            .andExpect(method(requireNonNull(POST)))
             .andRespond(withServerError());
         server.expect(requestTo("http://mock-udm:8090/nudm-ueau/v1/imsi-250010000000001/security-information/generate-auth-data"))
-            .andExpect(method(POST))
+            .andExpect(method(requireNonNull(POST)))
             .andRespond(withSuccess(
                 """
                 {
@@ -149,7 +150,7 @@ class HttpUdmClientTest {
         HttpUdmClient client = new HttpUdmClient(builder, nnrfClient, "http://mock-udm:8090");
 
         server.expect(requestTo("http://mock-udm:8090/nudm-ueau/v1/missing/security-information/generate-auth-data"))
-            .andExpect(method(POST))
+            .andExpect(method(requireNonNull(POST)))
             .andRespond(withResourceNotFound());
 
         assertFalse(client.getAuthenticationData("missing", "5G:mnc001.mcc001.3gppnetwork.org", "5G_AKA").isPresent());

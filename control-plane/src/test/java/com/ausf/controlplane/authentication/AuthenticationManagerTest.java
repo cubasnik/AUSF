@@ -96,6 +96,26 @@ class AuthenticationManagerTest {
     }
 
     @Test
+    void shouldMapUdmFailureToControlPlaneUnavailableDuringInitiate() {
+        AuthenticationManager manager = new AuthenticationManager(
+            cryptographyService,
+            (supi, servingNetworkName, authType) -> {
+                throw new IllegalStateException("UDM request failed: 503 Service Unavailable");
+            }
+        );
+
+        AuthenticationResponse result = manager.initiateAuthentication(
+            "imsi-250010000000503",
+            "5G:mnc001.mcc001.3gppnetwork.org",
+            "5G_AKA"
+        );
+
+        assertFalse(result.getSuccess());
+        assertEquals("CONTROL_PLANE_UNAVAILABLE", result.getErrorCode());
+        assertEquals("UDM request failed: 503 Service Unavailable", result.getMessage());
+    }
+
+    @Test
     void shouldRejectInvalidResStar() {
         authenticationManager.initiateAuthentication(
             "imsi-250010000000001",

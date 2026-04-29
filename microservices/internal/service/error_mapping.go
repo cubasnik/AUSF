@@ -8,6 +8,7 @@ import (
 
 const (
 	contextNotFoundCause            = "CONTEXT_NOT_FOUND"
+	contextStoreFailureCause        = "AUTH_CONTEXT_STORE_FAILURE"
 	controlPlaneUnavailableCause    = "CONTROL_PLANE_UNAVAILABLE"
 	controlPlaneInitiateFailedCause = "CONTROL_PLANE_INITIATE_FAILED"
 	controlPlaneConfirmFailedCause  = "CONTROL_PLANE_CONFIRMATION_FAILED"
@@ -33,6 +34,10 @@ func validateRequestedAuthType(authType string) error {
 
 func contextNotFoundError() APIError {
 	return APIError{StatusCode: 404, Message: "authentication context not found", Cause: contextNotFoundCause}
+}
+
+func contextStoreError(message string, err error) APIError {
+	return APIError{StatusCode: 500, Message: message + ": " + err.Error(), Cause: contextStoreFailureCause}
 }
 
 func mapInitiateError(err error) APIError {

@@ -1,7 +1,6 @@
 package service
 
 import (
-	"fmt"
 	"log"
 	"sync"
 	"time"
@@ -65,8 +64,8 @@ func (error APIError) Error() string {
 
 type AuthService struct {
 	mu                 sync.RWMutex
-	contexts           map[string]AuthContext
-	serial             uint64
+	store              AuthContextStore
+	contextTTL         time.Duration
 	controlPlaneClient controlPlaneAPI
 	namfClient         namfNotifier
 }
@@ -81,9 +80,20 @@ type namfNotifier interface {
 	NotifyUEAuthenticationStatus(notification namf.UEAuthenticationStatusNotification, notificationURI string) error
 }
 
+const defaultAuthContextTTL = 15 * time.Minute
+
 func NewAuthService(controlPlaneClient controlPlaneAPI, namfClient namfNotifier) *AuthService {
+	return NewAuthServiceWithStoreAndTTL(controlPlaneClient, namfClient, NewInMemoryAuthContextStore(), defaultAuthContextTTL)
+}
+
+func NewAuthServiceWithStore(controlPlaneClient controlPlaneAPI, namfClient namfNotifier, store AuthContextStore) *AuthService {
+	return NewAuthServiceWithStoreAndTTL(controlPlaneClient, namfClient, store, defaultAuthContextTTL)
+}
+
+func NewAuthServiceWithStoreAndTTL(controlPlaneClient controlPlaneAPI, namfClient namfNotifier, store AuthContextStore, contextTTL time.Duration) *AuthService {
 	return &AuthService{
-		contexts:           make(map[string]AuthContext),
+		store:              store,
+		contextTTL:         contextTTL,
 		controlPlaneClient: controlPlaneClient,
 		namfClient:         namfClient,
 	}
@@ -106,8 +116,10 @@ func (service *AuthService) CreateUEAuthentication(supi string, servingNetworkNa
 		return AuthContext{}, mapInitiateError(err)
 	}
 
-	service.serial++
-	authCtxID := fmt.Sprintf("auth-%d", service.serial)
+	authCtxID, err := service.store.NextAuthCtxID()
+	if err != nil {
+		return AuthContext{}, contextStoreError("auth context allocation failed", err)
+	}
 	context := AuthContext{
 		AuthCtxID:          authCtxID,
 		SUPI:               response.SUPI,
@@ -120,7 +132,9 @@ func (service *AuthService) CreateUEAuthentication(supi string, servingNetworkNa
 	}
 	context = initializeAuthContext(context, response)
 
-	service.contexts[authCtxID] = context
+	if err := service.store.Save(context); err != nil {
+		return AuthContext{}, contextStoreError("auth context persist failed", err)
+	}
 	return context, nil
 }
 
@@ -143,7 +157,9 @@ func (service *AuthService) Confirm(authCtxID string, resStar string, eapPayload
 
 	context.KSEAF = response.KSEAF
 	context.Status = authStatusAuthenticated
-	service.contexts[authCtxID] = context
+	if err := service.store.Save(context); err != nil {
+		return ConfirmationResult{}, contextStoreError("auth context update failed", err)
+	}
 
 	if service.namfClient != nil {
 		notification := namf.UEAuthenticationStatusNotification{
@@ -169,8 +185,8 @@ func (service *AuthService) Confirm(authCtxID string, resStar string, eapPayload
 }
 
 func (service *AuthService) Lookup(authCtxID string) (AuthContext, error) {
-	service.mu.RLock()
-	defer service.mu.RUnlock()
+	service.mu.Lock()
+	defer service.mu.Unlock()
 
 	return service.lookupContextLocked(authCtxID)
 }
@@ -182,16 +198,42 @@ func (service *AuthService) Delete(authCtxID string) error {
 	if _, err := service.lookupContextLocked(authCtxID); err != nil {
 		return err
 	}
-	delete(service.contexts, authCtxID)
+
+	deleted, err := service.store.Delete(authCtxID)
+	if err != nil {
+		return contextStoreError("auth context delete failed", err)
+	}
+	if !deleted {
+		return contextNotFoundError()
+	}
 	return nil
 }
 
 func (service *AuthService) lookupContextLocked(authCtxID string) (AuthContext, error) {
-	context, ok := service.contexts[authCtxID]
+	context, ok, err := service.store.Get(authCtxID)
+	if err != nil {
+		return AuthContext{}, contextStoreError("auth context lookup failed", err)
+	}
 	if !ok {
 		return AuthContext{}, contextNotFoundError()
 	}
+	if service.contextExpired(context) {
+		if _, err := service.store.Delete(authCtxID); err != nil {
+			return AuthContext{}, contextStoreError("auth context expiry cleanup failed", err)
+		}
+		return AuthContext{}, contextNotFoundError()
+	}
 	return context, nil
+}
+
+func (service *AuthService) contextExpired(context AuthContext) bool {
+	if service.contextTTL <= 0 {
+		return false
+	}
+	if context.CreatedAt.IsZero() {
+		return false
+	}
+	return time.Since(context.CreatedAt) > service.contextTTL
 }
 
 func initializeAuthContext(context AuthContext, response controlplane.AuthenticationResponse) AuthContext {

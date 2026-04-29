@@ -11,6 +11,11 @@ from pathlib import Path
 HOST = os.environ.get("MOCK_UDM_HOST", "0.0.0.0")
 PORT = int(os.environ.get("MOCK_UDM_PORT", "8090"))
 SUBSCRIBERS_FILE = Path(os.environ.get("MOCK_UDM_SUBSCRIBERS_FILE", "/app/control-plane/data/subscribers.json"))
+UNAVAILABLE_SUPIS = {
+    value.strip()
+    for value in os.environ.get("MOCK_UDM_UNAVAILABLE_SUPIS", "imsi-250010000000503").split(",")
+    if value.strip()
+}
 
 
 def load_subscribers() -> dict[str, dict]:
@@ -60,6 +65,10 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         supi = self.path[len(prefix):-len(suffix)].strip("/")
+        if supi in UNAVAILABLE_SUPIS:
+            self.write_json(503, {"detail": f"authentication data temporarily unavailable for {supi}", "cause": "UDM_UNAVAILABLE"})
+            return
+
         subscribers = load_subscribers()
         subscriber = subscribers.get(supi)
         if subscriber is None:

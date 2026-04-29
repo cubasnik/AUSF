@@ -3,6 +3,7 @@ package com.ausf.controlplane.udm;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static java.util.Objects.requireNonNull;
 import static org.springframework.http.HttpMethod.GET;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
@@ -23,7 +24,7 @@ class NnrfClientTest {
         NnrfClient client = new NnrfClient(builder, "http://mock-nrf:8091/");
 
         server.expect(requestTo("http://mock-nrf:8091/nnrf-disc/v1/nf-instances?target-nf-type=UDM&requester-nf-type=AUSF"))
-            .andExpect(method(GET))
+          .andExpect(method(requireNonNull(GET)))
             .andRespond(withSuccess(
                 """
                 {
@@ -59,13 +60,13 @@ class NnrfClientTest {
         NnrfClient client = new NnrfClient(builder, "http://mock-nrf:8091");
 
         server.expect(requestTo("http://mock-nrf:8091/nnrf-disc/v1/nf-instances?target-nf-type=UDM&requester-nf-type=AUSF"))
-            .andExpect(method(GET))
+            .andExpect(method(requireNonNull(GET)))
             .andRespond(withServerError());
       server.expect(requestTo("http://mock-nrf:8091/nnrf-disc/v1/nf-instances?target-nf-type=UDM&requester-nf-type=AUSF"))
-        .andExpect(method(GET))
+        .andExpect(method(requireNonNull(GET)))
         .andRespond(withServerError());
       server.expect(requestTo("http://mock-nrf:8091/nnrf-disc/v1/nf-instances?target-nf-type=UDM&requester-nf-type=AUSF"))
-        .andExpect(method(GET))
+        .andExpect(method(requireNonNull(GET)))
         .andRespond(withServerError());
 
         assertThrows(IllegalStateException.class, client::resolveUdmBaseUrl);
@@ -79,10 +80,10 @@ class NnrfClientTest {
         NnrfClient client = new NnrfClient(builder, "http://mock-nrf:8091");
 
         server.expect(requestTo("http://mock-nrf:8091/nnrf-disc/v1/nf-instances?target-nf-type=UDM&requester-nf-type=AUSF"))
-            .andExpect(method(GET))
+          .andExpect(method(requireNonNull(GET)))
             .andRespond(withServerError());
         server.expect(requestTo("http://mock-nrf:8091/nnrf-disc/v1/nf-instances?target-nf-type=UDM&requester-nf-type=AUSF"))
-            .andExpect(method(GET))
+          .andExpect(method(requireNonNull(GET)))
             .andRespond(withSuccess(
                 """
                 {

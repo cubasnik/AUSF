@@ -6,15 +6,15 @@ $ErrorActionPreference = "Stop"
 
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repoRoot = Resolve-Path (Join-Path $scriptDir "..\..")
-$runner = Join-Path $repoRoot "automation\scripts\run_fast_validation.ps1"
+$runner = Join-Path $repoRoot "automation\scripts\run_full_validation.py"
 
-Write-Host "Running pre-push regression suite from $repoRoot"
+Write-Host "Running fast validation from $repoRoot"
 
 Push-Location $repoRoot
 try {
-    & $runner -Python $Python
+    & $Python $runner
     if ($LASTEXITCODE -ne 0) {
-        throw "pre-push regression suite failed with exit code $LASTEXITCODE"
+        throw "fast validation failed with exit code $LASTEXITCODE"
     }
 }
 finally {

@@ -3,7 +3,9 @@ package service
 import (
 	"errors"
 	"net/http"
+	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/alexey/ausf/microservices/internal/controlplane"
 	"github.com/alexey/ausf/microservices/internal/namf"
@@ -68,14 +70,14 @@ func TestConfirmShouldNotifyNamfOnSuccessfulAuthentication(t *testing.T) {
 			Message: "authentication successful",
 		},
 	}, namfClient)
-	authService.contexts["auth-1"] = AuthContext{
+	mustSaveContext(t, authService, AuthContext{
 		AuthCtxID:          "auth-1",
 		SUPI:               "imsi-250010000000001",
 		AuthType:           "5G_AKA",
 		ServingNetworkName: "5G:mnc001.mcc001.3gppnetwork.org",
 		NotificationURI:    "http://mock-amf:8092/namf-comm/v1/ue-authentications/{authCtxId}/status-notify",
 		Status:             "CHALLENGE_SENT",
-	}
+	})
 
 	result, err := authService.Confirm("auth-1", "res-star", "")
 	if err != nil {
@@ -224,13 +226,98 @@ func TestConfirmShouldMapControlPlaneAuthenticationRejectedError(t *testing.T) {
 			ErrorCode:  "AUTHENTICATION_REJECTED",
 		},
 	}, nil)
-	authService.contexts["auth-1"] = AuthContext{
+	mustSaveContext(t, authService, AuthContext{
 		AuthCtxID: "auth-1",
 		SUPI:      "imsi-250010000000001",
-	}
+	})
 
 	_, err := authService.Confirm("auth-1", "deadbeef", "")
 	assertAPIError(t, err, http.StatusUnauthorized, "AUTHENTICATION_REJECTED", "RES* verification failed")
+}
+
+func TestLookupShouldReturnPersistedContextAcrossServiceRecreation(t *testing.T) {
+	storePath := filepath.Join(t.TempDir(), "auth-contexts.json")
+	store, err := NewFileAuthContextStore(storePath)
+	if err != nil {
+		t.Fatalf("NewFileAuthContextStore() error = %v", err)
+	}
+
+	firstService := NewAuthServiceWithStore(stubControlPlaneClient{}, nil, store)
+	created, err := firstService.CreateUEAuthentication(
+		"imsi-250010000000001",
+		"5G:mnc001.mcc001.3gppnetwork.org",
+		authTypeFiveGAka,
+		"",
+	)
+	if err != nil {
+		t.Fatalf("CreateUEAuthentication() error = %v", err)
+	}
+
+	reloadedStore, err := NewFileAuthContextStore(storePath)
+	if err != nil {
+		t.Fatalf("NewFileAuthContextStore() reload error = %v", err)
+	}
+
+	secondService := NewAuthServiceWithStore(stubControlPlaneClient{}, nil, reloadedStore)
+	loaded, err := secondService.Lookup(created.AuthCtxID)
+	if err != nil {
+		t.Fatalf("Lookup() error after service recreation = %v", err)
+	}
+	if loaded.AuthCtxID != created.AuthCtxID {
+		t.Fatalf("AuthCtxID = %s, want %s", loaded.AuthCtxID, created.AuthCtxID)
+	}
+	if loaded.SUPI != created.SUPI {
+		t.Fatalf("SUPI = %s, want %s", loaded.SUPI, created.SUPI)
+	}
+	if loaded.Status != created.Status {
+		t.Fatalf("status = %s, want %s", loaded.Status, created.Status)
+	}
+}
+
+func TestLookupShouldReturnContextNotFoundAfterTTLExpiration(t *testing.T) {
+	authService := NewAuthServiceWithStoreAndTTL(stubControlPlaneClient{}, nil, NewInMemoryAuthContextStore(), 20*time.Millisecond)
+
+	created, err := authService.CreateUEAuthentication(
+		"imsi-250010000000001",
+		"5G:mnc001.mcc001.3gppnetwork.org",
+		authTypeFiveGAka,
+		"",
+	)
+	if err != nil {
+		t.Fatalf("CreateUEAuthentication() error = %v", err)
+	}
+
+	time.Sleep(50 * time.Millisecond)
+
+	_, lookupErr := authService.Lookup(created.AuthCtxID)
+	assertAPIError(t, lookupErr, http.StatusNotFound, contextNotFoundCause, "authentication context not found")
+
+	_, ok, getErr := authService.store.Get(created.AuthCtxID)
+	if getErr != nil {
+		t.Fatalf("store.Get() error = %v", getErr)
+	}
+	if ok {
+		t.Fatalf("store still contains expired auth context %s", created.AuthCtxID)
+	}
+}
+
+func TestConfirmShouldReturnContextNotFoundAfterTTLExpiration(t *testing.T) {
+	authService := NewAuthServiceWithStoreAndTTL(stubControlPlaneClient{}, nil, NewInMemoryAuthContextStore(), 20*time.Millisecond)
+
+	created, err := authService.CreateUEAuthentication(
+		"imsi-250010000000001",
+		"5G:mnc001.mcc001.3gppnetwork.org",
+		authTypeFiveGAka,
+		"",
+	)
+	if err != nil {
+		t.Fatalf("CreateUEAuthentication() error = %v", err)
+	}
+
+	time.Sleep(50 * time.Millisecond)
+
+	_, confirmErr := authService.Confirm(created.AuthCtxID, "deadbeef", "")
+	assertAPIError(t, confirmErr, http.StatusNotFound, contextNotFoundCause, "authentication context not found")
 }
 
 func TestMapControlPlaneErrorShouldUseFallbackCauseWhenErrorCodeIsMissing(t *testing.T) {
@@ -265,5 +352,12 @@ func assertAPIError(t *testing.T, err error, wantStatus int, wantCause string, w
 	}
 	if apiErr.Message != wantMessage {
 		t.Fatalf("message = %s, want %s", apiErr.Message, wantMessage)
+	}
+}
+
+func mustSaveContext(t *testing.T, authService *AuthService, context AuthContext) {
+	t.Helper()
+	if err := authService.store.Save(context); err != nil {
+		t.Fatalf("save context error = %v", err)
 	}
 }

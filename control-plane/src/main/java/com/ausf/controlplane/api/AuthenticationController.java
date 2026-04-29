@@ -29,7 +29,7 @@ public class AuthenticationController {
             request.getAuthType()
         );
         if (!response.getSuccess()) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
+            return ResponseEntity.status(resolveFailureStatusCode(response)).body(response);
         }
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
@@ -45,10 +45,7 @@ public class AuthenticationController {
             request.getEapPayload()
         );
         if (!response.getSuccess()) {
-            if ("CONTEXT_NOT_FOUND".equals(response.getErrorCode())) {
-                return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
-            }
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(response);
+            return ResponseEntity.status(resolveFailureStatusCode(response)).body(response);
         }
         return ResponseEntity.ok(response);
     }
@@ -60,5 +57,14 @@ public class AuthenticationController {
             return ResponseEntity.notFound().build();
         }
         return ResponseEntity.ok(context);
+    }
+
+    private int resolveFailureStatusCode(AuthenticationResponse response) {
+        return switch (response.getErrorCode()) {
+            case "SUBSCRIBER_NOT_FOUND", "CONTEXT_NOT_FOUND" -> HttpStatus.NOT_FOUND.value();
+            case "AUTHENTICATION_REJECTED" -> HttpStatus.UNAUTHORIZED.value();
+            case "CONTROL_PLANE_UNAVAILABLE" -> HttpStatus.BAD_GATEWAY.value();
+            default -> HttpStatus.INTERNAL_SERVER_ERROR.value();
+        };
     }
 }

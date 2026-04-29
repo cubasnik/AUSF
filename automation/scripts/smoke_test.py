@@ -3,25 +3,14 @@ from __future__ import annotations
 import hashlib
 import json
 import sys
-import time
-from http.client import RemoteDisconnected
 
 from pathlib import Path
-from urllib import request
-from urllib.error import URLError
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from smoke_client import AUSFClient
-
-
-HEALTH_ENDPOINTS = [
-    "http://127.0.0.1:8090/healthz",
-    "http://127.0.0.1:8091/healthz",
-    "http://127.0.0.1:8081/healthz",
-    "http://127.0.0.1:8080/healthz",
-]
+from smoke_runtime import AUSF_BASE_URL, BASIC_HEALTH_ENDPOINTS, wait_for_health
 
 
 def load_permanent_key(supi: str) -> str:
@@ -33,25 +22,12 @@ def load_permanent_key(supi: str) -> str:
     raise ValueError(f"seed subscriber not found for {supi}")
 
 
-def wait_for_health(url: str, timeout_seconds: int = 60) -> dict:
-    deadline = time.time() + timeout_seconds
-    last_error: Exception | None = None
-    while time.time() < deadline:
-        try:
-            with request.urlopen(url, timeout=5) as response:
-                return json.loads(response.read().decode("utf-8"))
-        except (URLError, TimeoutError, json.JSONDecodeError, RemoteDisconnected, ConnectionResetError, OSError) as error:
-            last_error = error
-            time.sleep(1)
-    raise RuntimeError(f"timed out waiting for {url}: {last_error}")
-
-
 def main() -> int:
     supi = "imsi-250010000000001"
     serving_network_name = "5G:mnc001.mcc001.3gppnetwork.org"
-    for url in HEALTH_ENDPOINTS:
+    for url in BASIC_HEALTH_ENDPOINTS:
         print(f"health-check: {wait_for_health(url)}")
-    client = AUSFClient("http://127.0.0.1:8080")
+    client = AUSFClient(AUSF_BASE_URL)
     health = client.health()
     print(f"health: {health}")
 

@@ -1,4 +1,4 @@
-.PHONY: help networking-build networking-run control-plane-test control-plane-run microservices-build microservices-run automation-test smoke-test http-udm-smoke-suite validate-all regression-suite compose-up compose-down compose-logs compose-refresh-mocks
+.PHONY: help networking-build networking-run control-plane-test control-plane-run microservices-build microservices-run automation-test smoke-test smoke-ttl-only http-udm-smoke-suite validate-fast-pwsh validate-fast validate-all regression-suite compose-up compose-down compose-logs compose-refresh-mocks
 
 help:
 	@echo "AUSF polyglot workspace"
@@ -11,8 +11,11 @@ help:
 	@echo "  make microservices-run  Start the Go AUSF service"
 	@echo "  make automation-test    Run Python automation tests"
 	@echo "  make smoke-test         Run Python end-to-end smoke client"
+	@echo "  make smoke-ttl-only    Run only TTL-expiration smoke scenario"
 	@echo "  make http-udm-smoke-suite Run the full HTTP UDM happy/negative smoke suite"
-	@echo "  make validate-all      Run Python, Go, Java, and HTTP UDM validation in one shot"
+	@echo "  make validate-fast-pwsh Run the PowerShell fast-validation wrapper"
+	@echo "  make validate-fast     Run fast validation; on Windows this delegates to the PowerShell wrapper"
+	@echo "  make validate-all      Backward-compatible alias for validate-fast"
 	@echo "  make regression-suite  Run the minimal reproducible pre-push regression suite"
 	@echo "  make compose-up         Start Go and Java services in Docker"
 	@echo "  make compose-down       Stop Docker Compose stack"
@@ -44,11 +47,19 @@ automation-test:
 smoke-test:
 	cd automation && python scripts/smoke_test.py
 
+smoke-ttl-only:
+	docker compose build ausf-go
+	python automation/scripts/run_ttl_smoke_only.py --skip-build
+
 http-udm-smoke-suite:
 	python automation/scripts/run_http_udm_smoke_suite.py
 
-validate-all:
-	python automation/scripts/run_full_validation.py
+validate-fast-pwsh:
+	pwsh -File automation/scripts/run_fast_validation.ps1
+
+validate-fast: validate-fast-pwsh
+
+validate-all: validate-fast
 
 regression-suite: validate-all
 

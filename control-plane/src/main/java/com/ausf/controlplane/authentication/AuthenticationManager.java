@@ -20,7 +20,13 @@ public class AuthenticationManager {
     }
 
     public AuthenticationResponse initiateAuthentication(String supi, String servingNetworkName, String authType) {
-        Optional<UdmAuthenticationData> udmAuthenticationData = udmClient.getAuthenticationData(supi, servingNetworkName, authType);
+        Optional<UdmAuthenticationData> udmAuthenticationData;
+        try {
+            udmAuthenticationData = udmClient.getAuthenticationData(supi, servingNetworkName, authType);
+        } catch (IllegalStateException exception) {
+            return AuthenticationResponse.failure(exception.getMessage(), "CONTROL_PLANE_UNAVAILABLE");
+        }
+
         if (udmAuthenticationData.isEmpty()) {
             return AuthenticationResponse.failure("subscriber not found in UDM storage", "SUBSCRIBER_NOT_FOUND");
         }
