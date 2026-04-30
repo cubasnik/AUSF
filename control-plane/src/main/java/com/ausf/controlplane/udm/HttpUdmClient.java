@@ -1,5 +1,6 @@
 package com.ausf.controlplane.udm;
 
+import java.time.Duration;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Supplier;
@@ -17,19 +18,25 @@ import org.springframework.web.client.RestClientException;
 public class HttpUdmClient implements UdmClient {
     private static final int MAX_ATTEMPTS = 3;
     private static final long BACKOFF_MILLIS = 200L;
+    static final int DEFAULT_BREAKER_FAILURES = 5;
+    static final int DEFAULT_BREAKER_OPEN_SECONDS = 10;
 
     private final RestClient.Builder restClientBuilder;
     private final NnrfClient nnrfClient;
     private final String configuredBaseUrl;
+    final UdmCircuitBreaker circuitBreaker;
 
     public HttpUdmClient(
         RestClient.Builder restClientBuilder,
         NnrfClient nnrfClient,
-        @Value("${ausf.udm.base-url:}") String baseUrl
+        @Value("${ausf.udm.base-url:}") String baseUrl,
+        @Value("${ausf.udm.breaker.failure-threshold:" + DEFAULT_BREAKER_FAILURES + "}") int breakerFailures,
+        @Value("${ausf.udm.breaker.open-duration-seconds:" + DEFAULT_BREAKER_OPEN_SECONDS + "}") int breakerOpenSeconds
     ) {
         this.restClientBuilder = restClientBuilder;
         this.nnrfClient = nnrfClient;
         this.configuredBaseUrl = sanitizeBaseUrl(baseUrl);
+        this.circuitBreaker = new UdmCircuitBreaker(breakerFailures, Duration.ofSeconds(breakerOpenSeconds));
     }
 
     @Override
@@ -66,6 +73,8 @@ public class HttpUdmClient implements UdmClient {
             return Optional.empty();
         } catch (RestClientException exception) {
             throw new IllegalStateException("UDM request failed: " + exception.getMessage(), exception);
+        } catch (UdmUnavailableException exception) {
+            throw new IllegalStateException("UDM circuit breaker is open: " + exception.getMessage(), exception);
         }
     }
 
@@ -88,12 +97,20 @@ public class HttpUdmClient implements UdmClient {
     }
 
     private <T> T executeWithRetry(Supplier<T> call) {
+        if (!circuitBreaker.allowRequest()) {
+            throw new UdmUnavailableException("circuit breaker is open — UDM requests are blocked");
+        }
         RestClientException lastException = null;
         for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
             try {
-                return call.get();
+                T result = call.get();
+                circuitBreaker.onSuccess();
+                return result;
             } catch (RestClientException exception) {
                 lastException = exception;
+                if (isBreakerFailure(exception)) {
+                    circuitBreaker.onFailure();
+                }
                 if (!shouldRetry(exception) || attempt == MAX_ATTEMPTS) {
                     throw exception;
                 }
@@ -104,6 +121,15 @@ public class HttpUdmClient implements UdmClient {
             "UDM request failed: " + (lastException == null ? "unknown error" : lastException.getMessage()),
             lastException
         );
+    }
+
+    /** Returns true for failure types that should "count" against the circuit breaker. */
+    private boolean isBreakerFailure(RestClientException exception) {
+        if (exception instanceof HttpClientErrorException) {
+            // 4xx are client errors, not UDM unavailability
+            return false;
+        }
+        return true;
     }
 
     private boolean shouldRetry(RestClientException exception) {
