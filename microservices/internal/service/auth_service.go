@@ -1,7 +1,9 @@
 package service
 
 import (
-	"log"
+	"encoding/json"
+	"fmt"
+	"os"
 	"sync"
 	"time"
 
@@ -68,6 +70,16 @@ type AuthService struct {
 	contextTTL         time.Duration
 	controlPlaneClient controlPlaneAPI
 	namfClient         namfNotifier
+	recorder           authMetricsRecorder
+}
+
+// authMetricsRecorder is a local interface so the service package does not
+// need to import the metrics package — any value satisfying these three
+// methods (including *metrics.Registry) will work.
+type authMetricsRecorder interface {
+	RecordAuthInitiated(authType string)
+	RecordAuthConfirmed(authType string)
+	RecordAuthFailed(cause string)
 }
 
 type controlPlaneAPI interface {
@@ -99,11 +111,22 @@ func NewAuthServiceWithStoreAndTTL(controlPlaneClient controlPlaneAPI, namfClien
 	}
 }
 
+// SetMetricsRecorder attaches an auth-domain metrics recorder.
+// It is safe to call before serving any requests.
+func (service *AuthService) SetMetricsRecorder(r authMetricsRecorder) {
+	service.recorder = r
+}
+
 func (service *AuthService) CreateUEAuthentication(supi string, servingNetworkName string, authType string, notificationURI string) (AuthContext, error) {
 	service.mu.Lock()
 	defer service.mu.Unlock()
 
 	if err := validateRequestedAuthType(authType); err != nil {
+		if service.recorder != nil {
+			if apiErr, ok := err.(APIError); ok {
+				service.recorder.RecordAuthFailed(apiErr.Cause)
+			}
+		}
 		return AuthContext{}, err
 	}
 
@@ -113,7 +136,11 @@ func (service *AuthService) CreateUEAuthentication(supi string, servingNetworkNa
 		AuthType:           authType,
 	})
 	if err != nil {
-		return AuthContext{}, mapInitiateError(err)
+		mappedErr := mapInitiateError(err)
+		if service.recorder != nil {
+			service.recorder.RecordAuthFailed(mappedErr.Cause)
+		}
+		return AuthContext{}, mappedErr
 	}
 
 	authCtxID, err := service.store.NextAuthCtxID()
@@ -135,6 +162,9 @@ func (service *AuthService) CreateUEAuthentication(supi string, servingNetworkNa
 	if err := service.store.Save(context); err != nil {
 		return AuthContext{}, contextStoreError("auth context persist failed", err)
 	}
+	if service.recorder != nil {
+		service.recorder.RecordAuthInitiated(context.AuthType)
+	}
 	return context, nil
 }
 
@@ -152,7 +182,11 @@ func (service *AuthService) Confirm(authCtxID string, resStar string, eapPayload
 		EapPayload: eapPayload,
 	})
 	if err != nil {
-		return ConfirmationResult{}, mapConfirmError(err)
+		mappedErr := mapConfirmError(err)
+		if service.recorder != nil {
+			service.recorder.RecordAuthFailed(mappedErr.Cause)
+		}
+		return ConfirmationResult{}, mappedErr
 	}
 
 	context.KSEAF = response.KSEAF
@@ -171,8 +205,14 @@ func (service *AuthService) Confirm(authCtxID string, resStar string, eapPayload
 			KSEAF:              context.KSEAF,
 		}
 		if err := service.namfClient.NotifyUEAuthenticationStatus(notification, context.NotificationURI); err != nil {
-			log.Printf("namf notification failed for %s: %v", authCtxID, err)
+			logServiceJSON("WARN", "namf notification failed", map[string]any{
+				"auth_ctx_id": authCtxID,
+				"error":       err.Error(),
+			})
 		}
+	}
+	if service.recorder != nil {
+		service.recorder.RecordAuthConfirmed(context.AuthType)
 	}
 
 	return ConfirmationResult{
@@ -266,4 +306,12 @@ func initializeEapAkaPrimeContext(context AuthContext, eapChallenge string) Auth
 	}
 	context.Links.EapSession = &Link{Href: "/nausf-auth/v1/ue-authentications/" + context.AuthCtxID + "/eap-session"}
 	return context
+}
+
+func logServiceJSON(level, msg string, fields map[string]any) {
+	fields["time"] = time.Now().UTC().Format(time.RFC3339Nano)
+	fields["level"] = level
+	fields["msg"] = msg
+	data, _ := json.Marshal(fields)
+	_, _ = fmt.Fprintln(os.Stderr, string(data))
 }

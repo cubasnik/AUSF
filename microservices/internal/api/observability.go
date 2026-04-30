@@ -4,13 +4,14 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
-	"strconv"
+	"os"
 	"strings"
-	"sync"
 	"time"
+
+	"github.com/alexey/ausf/microservices/internal/metrics"
 )
 
 type traceIDKeyType string
@@ -25,13 +26,13 @@ const unknownRoute = "unknown"
 
 var traceIDKey traceIDKeyType = "trace-id"
 
-var (
-	metricsCollector = &httpMetrics{
-		requests: make(map[string]float64),
-		sum:      make(map[string]float64),
-		count:    make(map[string]float64),
-	}
-)
+var defaultRegistry = metrics.NewRegistry()
+
+// SetDefaultRegistry replaces the registry used by the observability middleware
+// and the /metrics handler. Call once at startup before serving requests.
+func SetDefaultRegistry(r *metrics.Registry) {
+	defaultRegistry = r
+}
 
 func withObservability(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
@@ -51,23 +52,30 @@ func withObservability(next http.Handler) http.Handler {
 		next.ServeHTTP(wrapped, request)
 		duration := time.Since(start)
 
-		metricsCollector.observe(request.Method, route, wrapped.statusCode, duration.Seconds())
+		defaultRegistry.ObserveHTTP(request.Method, route, wrapped.statusCode, duration.Seconds())
 
-		log.Printf(
-			"trace_id=%s method=%s route=%s status=%d duration_ms=%.2f remote=%s",
-			traceID,
-			request.Method,
-			route,
-			wrapped.statusCode,
-			float64(duration.Microseconds())/1000.0,
-			request.RemoteAddr,
-		)
+		logJSON(map[string]any{
+			"level":       "INFO",
+			"msg":         "request",
+			"trace_id":    traceID,
+			"method":      request.Method,
+			"route":       route,
+			"status":      wrapped.statusCode,
+			"duration_ms": float64(duration.Microseconds()) / 1000.0,
+			"remote":      request.RemoteAddr,
+		})
 	})
 }
 
 func (handler Handler) metrics(writer http.ResponseWriter, _ *http.Request) {
 	writer.Header().Set("Content-Type", "text/plain; version=0.0.4")
-	_, _ = writer.Write([]byte(metricsCollector.prometheusText()))
+	_, _ = writer.Write([]byte(defaultRegistry.PrometheusText()))
+}
+
+func logJSON(fields map[string]any) {
+	fields["time"] = time.Now().UTC().Format(time.RFC3339Nano)
+	data, _ := json.Marshal(fields)
+	_, _ = fmt.Fprintln(os.Stderr, string(data))
 }
 
 func TraceIDFromContext(ctx context.Context) string {
@@ -166,53 +174,4 @@ func (recorder *statusRecorder) WriteHeader(statusCode int) {
 	recorder.ResponseWriter.WriteHeader(statusCode)
 }
 
-type httpMetrics struct {
-	mu       sync.RWMutex
-	requests map[string]float64
-	sum      map[string]float64
-	count    map[string]float64
-}
 
-func (metrics *httpMetrics) observe(method string, route string, statusCode int, durationSeconds float64) {
-	status := strconv.Itoa(statusCode)
-
-	metrics.mu.Lock()
-	defer metrics.mu.Unlock()
-
-	requestKey := metricLabels(method, route, status)
-	metrics.requests[requestKey]++
-
-	durationKey := metricLabels(method, route, "")
-	metrics.sum[durationKey] += durationSeconds
-	metrics.count[durationKey]++
-}
-
-func (metrics *httpMetrics) prometheusText() string {
-	metrics.mu.RLock()
-	defer metrics.mu.RUnlock()
-
-	var builder strings.Builder
-	builder.WriteString("# HELP ausf_http_requests_total Total number of HTTP requests handled by AUSF.\n")
-	builder.WriteString("# TYPE ausf_http_requests_total counter\n")
-	for labels, value := range metrics.requests {
-		builder.WriteString(fmt.Sprintf("ausf_http_requests_total{%s} %g\n", labels, value))
-	}
-
-	builder.WriteString("# HELP ausf_http_request_duration_seconds Request duration metrics for AUSF handlers.\n")
-	builder.WriteString("# TYPE ausf_http_request_duration_seconds summary\n")
-	for labels, value := range metrics.sum {
-		builder.WriteString(fmt.Sprintf("ausf_http_request_duration_seconds_sum{%s} %g\n", labels, value))
-	}
-	for labels, value := range metrics.count {
-		builder.WriteString(fmt.Sprintf("ausf_http_request_duration_seconds_count{%s} %g\n", labels, value))
-	}
-
-	return builder.String()
-}
-
-func metricLabels(method string, route string, status string) string {
-	if status == "" {
-		return fmt.Sprintf("method=\"%s\",route=\"%s\"", method, route)
-	}
-	return fmt.Sprintf("method=\"%s\",route=\"%s\",status=\"%s\"", method, route, status)
-}
