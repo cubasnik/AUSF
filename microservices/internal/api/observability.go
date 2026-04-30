@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/alexey/ausf/microservices/internal/metrics"
+	"github.com/alexey/ausf/microservices/internal/tracing"
 )
 
 type traceIDKeyType string
@@ -28,6 +29,14 @@ var traceIDKey traceIDKeyType = "trace-id"
 
 var defaultRegistry = metrics.NewRegistry()
 
+var defaultTracer *tracing.Tracer
+
+// SetTracer sets the tracer used by the observability middleware.
+// Call once at startup before serving requests.
+func SetTracer(t *tracing.Tracer) {
+	defaultTracer = t
+}
+
 // SetDefaultRegistry replaces the registry used by the observability middleware
 // and the /metrics handler. Call once at startup before serving requests.
 func SetDefaultRegistry(r *metrics.Registry) {
@@ -36,10 +45,18 @@ func SetDefaultRegistry(r *metrics.Registry) {
 
 func withObservability(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-		traceID := extractOrCreateTraceID(request)
+		traceID, parentSpanID := extractTraceAndParent(request)
 		traceparent := formatTraceparent(traceID)
 
 		ctx := context.WithValue(request.Context(), traceIDKey, traceID)
+
+		var span *tracing.Span
+		if defaultTracer != nil {
+			ctx, span = defaultTracer.StartSpan(ctx, normalizeRoute(request.URL.Path), tracing.SpanKindServer, traceID, parentSpanID)
+			traceparent = span.SpanContext().Traceparent()
+			traceID = span.SpanContext().TraceID
+		}
+
 		request = request.WithContext(ctx)
 		request.Header.Set(traceparentHeader, traceparent)
 
@@ -51,6 +68,18 @@ func withObservability(next http.Handler) http.Handler {
 		wrapped := &statusRecorder{ResponseWriter: writer, statusCode: http.StatusOK}
 		next.ServeHTTP(wrapped, request)
 		duration := time.Since(start)
+
+		if span != nil {
+			span.SetAttribute("http.method", request.Method)
+			span.SetAttribute("http.route", route)
+			span.SetAttribute("http.status_code", wrapped.statusCode)
+			if wrapped.statusCode >= 500 {
+				span.SetStatus(tracing.StatusError, http.StatusText(wrapped.statusCode))
+			} else {
+				span.SetStatus(tracing.StatusOK, "")
+			}
+			span.End()
+		}
 
 		defaultRegistry.ObserveHTTP(request.Method, route, wrapped.statusCode, duration.Seconds())
 
@@ -85,34 +114,49 @@ func TraceIDFromContext(ctx context.Context) string {
 	return ""
 }
 
-func extractOrCreateTraceID(request *http.Request) string {
-	if traceparent := strings.TrimSpace(request.Header.Get(traceparentHeader)); traceparent != "" {
-		if traceID, ok := traceIDFromTraceparent(traceparent); ok {
-			return traceID
+// extractTraceAndParent returns (traceID, parentSpanID) parsed from the
+// inbound traceparent header.  Both are hex strings (or empty on miss).
+func extractTraceAndParent(request *http.Request) (string, string) {
+	if raw := strings.TrimSpace(request.Header.Get(traceparentHeader)); raw != "" {
+		if traceID, parentSpanID, ok := parseTraceparent(raw); ok {
+			return traceID, parentSpanID
 		}
 	}
-
 	if traceID := strings.TrimSpace(request.Header.Get(traceHeaderName)); traceID != "" {
 		if isHexTraceID(traceID) {
-			return strings.ToLower(traceID)
+			return strings.ToLower(traceID), ""
 		}
 	}
+	return newTraceID(), ""
+}
 
-	return newTraceID()
+func extractOrCreateTraceID(request *http.Request) string {
+	traceID, _ := extractTraceAndParent(request)
+	return traceID
+}
+
+func parseTraceparent(traceparent string) (traceID, parentSpanID string, ok bool) {
+	parts := strings.Split(strings.TrimSpace(traceparent), "-")
+	if len(parts) != 4 {
+		return "", "", false
+	}
+
+	traceID = strings.ToLower(parts[1])
+	if len(traceID) != 32 || !isHexTraceID(traceID) {
+		return "", "", false
+	}
+
+	parentSpanID = strings.ToLower(parts[2])
+	if len(parentSpanID) != 16 {
+		parentSpanID = ""
+	}
+
+	return traceID, parentSpanID, true
 }
 
 func traceIDFromTraceparent(traceparent string) (string, bool) {
-	parts := strings.Split(strings.TrimSpace(traceparent), "-")
-	if len(parts) != 4 {
-		return "", false
-	}
-
-	traceID := strings.ToLower(parts[1])
-	if len(traceID) != 32 || !isHexTraceID(traceID) {
-		return "", false
-	}
-
-	return traceID, true
+	traceID, _, ok := parseTraceparent(traceparent)
+	return traceID, ok
 }
 
 func isHexTraceID(value string) bool {

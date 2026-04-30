@@ -2,6 +2,7 @@ package controlplane
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -10,6 +11,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/alexey/ausf/microservices/internal/tracing"
 )
 
 const (
@@ -79,19 +82,19 @@ func NewClientWithBreaker(baseURL string, failures int, timeout time.Duration) *
 	}
 }
 
-func (client *Client) Initiate(request AuthenticationRequest) (AuthenticationResponse, error) {
-	return client.doJSON(http.MethodPost, "/control-plane/v1/auth/initiate", request)
+func (client *Client) Initiate(ctx context.Context, request AuthenticationRequest) (AuthenticationResponse, error) {
+	return client.doJSON(ctx, http.MethodPost, "/control-plane/v1/auth/initiate", request)
 }
 
-func (client *Client) Confirm(supi string, request AuthenticationRequest) (AuthenticationResponse, error) {
-	return client.doJSON(http.MethodPost, "/control-plane/v1/auth/"+supi+"/confirm", request)
+func (client *Client) Confirm(ctx context.Context, supi string, request AuthenticationRequest) (AuthenticationResponse, error) {
+	return client.doJSON(ctx, http.MethodPost, "/control-plane/v1/auth/"+supi+"/confirm", request)
 }
 
-func (client *Client) Context(supi string) (AuthenticationResponse, error) {
-	return client.doJSON(http.MethodGet, "/control-plane/v1/auth/"+supi, nil)
+func (client *Client) Context(ctx context.Context, supi string) (AuthenticationResponse, error) {
+	return client.doJSON(ctx, http.MethodGet, "/control-plane/v1/auth/"+supi, nil)
 }
 
-func (client *Client) doJSON(method string, path string, payload any) (AuthenticationResponse, error) {
+func (client *Client) doJSON(ctx context.Context, method string, path string, payload any) (AuthenticationResponse, error) {
 	if !client.breaker.allow() {
 		return AuthenticationResponse{}, APIError{
 			StatusCode: http.StatusServiceUnavailable,
@@ -100,7 +103,7 @@ func (client *Client) doJSON(method string, path string, payload any) (Authentic
 		}
 	}
 
-	response, err := client.doJSONWithRetries(method, path, payload)
+	response, err := client.doJSONWithRetries(ctx, method, path, payload)
 	if err != nil {
 		var apiErr APIError
 		if errors.As(err, &apiErr) && apiErr.StatusCode < http.StatusInternalServerError {
@@ -116,7 +119,7 @@ func (client *Client) doJSON(method string, path string, payload any) (Authentic
 	return response, nil
 }
 
-func (client *Client) doJSONWithRetries(method string, path string, payload any) (AuthenticationResponse, error) {
+func (client *Client) doJSONWithRetries(ctx context.Context, method string, path string, payload any) (AuthenticationResponse, error) {
 	var body []byte
 	var err error
 	if payload != nil {
@@ -128,12 +131,15 @@ func (client *Client) doJSONWithRetries(method string, path string, payload any)
 
 	var lastErr error
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
-		httpRequest, requestErr := http.NewRequest(method, client.baseURL+path, bytes.NewReader(body))
+		httpRequest, requestErr := http.NewRequestWithContext(ctx, method, client.baseURL+path, bytes.NewReader(body))
 		if requestErr != nil {
 			return AuthenticationResponse{}, requestErr
 		}
 		if payload != nil {
 			httpRequest.Header.Set("Content-Type", "application/json")
+		}
+		if sc := tracing.SpanContextFromContext(ctx); sc.IsValid() {
+			httpRequest.Header.Set("traceparent", sc.Traceparent())
 		}
 
 		response, requestErr := client.httpClient.Do(httpRequest)

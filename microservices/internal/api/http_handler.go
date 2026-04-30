@@ -66,7 +66,7 @@ func (handler Handler) createUEAuthentication(writer http.ResponseWriter, reques
 		return
 	}
 
-	context, err := handler.authService.CreateUEAuthentication(payload.SUPI, payload.ServingNetworkName, payload.AuthType, payload.NotificationURI)
+	context, err := handler.authService.CreateUEAuthentication(request.Context(), payload.SUPI, payload.ServingNetworkName, payload.AuthType, payload.NotificationURI)
 	if err != nil {
 		apiErr := err.(service.APIError)
 		writeProblem(writer, apiErr.StatusCode, "Authentication setup failed", apiErr.Message, apiErr.Cause, request.URL.Path)
@@ -141,7 +141,7 @@ func (handler Handler) confirm(writer http.ResponseWriter, request *http.Request
 		return
 	}
 
-	result, err := handler.authService.Confirm(authCtxID, payload.ResStar, payload.EapPayload)
+	result, err := handler.authService.Confirm(request.Context(), authCtxID, payload.ResStar, payload.EapPayload)
 	if err != nil {
 		apiErr := err.(service.APIError)
 		writeProblem(writer, apiErr.StatusCode, "Authentication rejected", apiErr.Message, apiErr.Cause, request.URL.Path)

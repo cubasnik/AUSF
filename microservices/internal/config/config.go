@@ -15,6 +15,7 @@ type Config struct {
 	AuthContextTTLSeconds int
 	BreakerFailures       int
 	BreakerTimeoutSeconds int
+	OTLPEndpoint          string
 }
 
 func Load() Config {
@@ -60,7 +61,7 @@ func Load() Config {
 		}
 	}
 
-	return Config{Host: host, Port: port, ControlPlaneBaseURL: controlPlaneBaseURL, NamfBaseURL: namfBaseURL, AuthContextStoreFile: authContextStoreFile, AuthContextTTLSeconds: authContextTTLSeconds, BreakerFailures: breakerFailures, BreakerTimeoutSeconds: breakerTimeoutSeconds}
+	return Config{Host: host, Port: port, ControlPlaneBaseURL: controlPlaneBaseURL, NamfBaseURL: namfBaseURL, AuthContextStoreFile: authContextStoreFile, AuthContextTTLSeconds: authContextTTLSeconds, BreakerFailures: breakerFailures, BreakerTimeoutSeconds: breakerTimeoutSeconds, OTLPEndpoint: os.Getenv("AUSF_OTLP_ENDPOINT")}
 }
 
 func (config Config) Address() string {

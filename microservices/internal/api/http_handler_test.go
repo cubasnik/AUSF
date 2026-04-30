@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -14,7 +15,7 @@ import (
 
 type stubControlPlaneClient struct{}
 
-func (stubControlPlaneClient) Initiate(request controlplane.AuthenticationRequest) (controlplane.AuthenticationResponse, error) {
+func (stubControlPlaneClient) Initiate(_ context.Context, request controlplane.AuthenticationRequest) (controlplane.AuthenticationResponse, error) {
 	return controlplane.AuthenticationResponse{
 		Success:            true,
 		SUPI:               request.SUPI,
@@ -26,11 +27,11 @@ func (stubControlPlaneClient) Initiate(request controlplane.AuthenticationReques
 	}, nil
 }
 
-func (stubControlPlaneClient) Confirm(string, controlplane.AuthenticationRequest) (controlplane.AuthenticationResponse, error) {
+func (stubControlPlaneClient) Confirm(_ context.Context, _ string, _ controlplane.AuthenticationRequest) (controlplane.AuthenticationResponse, error) {
 	return controlplane.AuthenticationResponse{}, nil
 }
 
-func (stubControlPlaneClient) Context(string) (controlplane.AuthenticationResponse, error) {
+func (stubControlPlaneClient) Context(_ context.Context, _ string) (controlplane.AuthenticationResponse, error) {
 	return controlplane.AuthenticationResponse{}, nil
 }
 
@@ -441,7 +442,7 @@ func TestFiveGAkaConfirmationShouldPropagateAuthenticationRejectedCause(t *testi
 	authService := service.NewAuthService(failingRejectedConfirmControlPlaneClient{}, nil)
 	handler := NewHandler(authService).Routes()
 
-	_, err := authService.CreateUEAuthentication("imsi-250010000000001", "5G:mnc001.mcc001.3gppnetwork.org", "5G_AKA", "")
+	_, err := authService.CreateUEAuthentication(context.Background(), "imsi-250010000000001", "5G:mnc001.mcc001.3gppnetwork.org", "5G_AKA", "")
 	if err != nil {
 		t.Fatalf("CreateUEAuthentication() error = %v", err)
 	}
@@ -472,7 +473,7 @@ func TestFiveGAkaConfirmationShouldPropagateControlPlaneNotFoundCause(t *testing
 	authService := service.NewAuthService(failingConfirmControlPlaneClient{}, nil)
 	handler := NewHandler(authService).Routes()
 
-	_, err := authService.CreateUEAuthentication("imsi-250010000000001", "5G:mnc001.mcc001.3gppnetwork.org", "5G_AKA", "")
+	_, err := authService.CreateUEAuthentication(context.Background(), "imsi-250010000000001", "5G:mnc001.mcc001.3gppnetwork.org", "5G_AKA", "")
 	if err != nil {
 		t.Fatalf("CreateUEAuthentication() error = %v", err)
 	}

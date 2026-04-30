@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -83,9 +84,9 @@ type authMetricsRecorder interface {
 }
 
 type controlPlaneAPI interface {
-	Initiate(request controlplane.AuthenticationRequest) (controlplane.AuthenticationResponse, error)
-	Confirm(supi string, request controlplane.AuthenticationRequest) (controlplane.AuthenticationResponse, error)
-	Context(supi string) (controlplane.AuthenticationResponse, error)
+	Initiate(ctx context.Context, request controlplane.AuthenticationRequest) (controlplane.AuthenticationResponse, error)
+	Confirm(ctx context.Context, supi string, request controlplane.AuthenticationRequest) (controlplane.AuthenticationResponse, error)
+	Context(ctx context.Context, supi string) (controlplane.AuthenticationResponse, error)
 }
 
 type namfNotifier interface {
@@ -117,7 +118,7 @@ func (service *AuthService) SetMetricsRecorder(r authMetricsRecorder) {
 	service.recorder = r
 }
 
-func (service *AuthService) CreateUEAuthentication(supi string, servingNetworkName string, authType string, notificationURI string) (AuthContext, error) {
+func (service *AuthService) CreateUEAuthentication(ctx context.Context, supi string, servingNetworkName string, authType string, notificationURI string) (AuthContext, error) {
 	service.mu.Lock()
 	defer service.mu.Unlock()
 
@@ -130,7 +131,7 @@ func (service *AuthService) CreateUEAuthentication(supi string, servingNetworkNa
 		return AuthContext{}, err
 	}
 
-	response, err := service.controlPlaneClient.Initiate(controlplane.AuthenticationRequest{
+	response, err := service.controlPlaneClient.Initiate(ctx, controlplane.AuthenticationRequest{
 		SUPI:               supi,
 		ServingNetworkName: servingNetworkName,
 		AuthType:           authType,
@@ -168,7 +169,7 @@ func (service *AuthService) CreateUEAuthentication(supi string, servingNetworkNa
 	return context, nil
 }
 
-func (service *AuthService) Confirm(authCtxID string, resStar string, eapPayload string) (ConfirmationResult, error) {
+func (service *AuthService) Confirm(ctx context.Context, authCtxID string, resStar string, eapPayload string) (ConfirmationResult, error) {
 	service.mu.Lock()
 	defer service.mu.Unlock()
 
@@ -177,7 +178,7 @@ func (service *AuthService) Confirm(authCtxID string, resStar string, eapPayload
 		return ConfirmationResult{}, err
 	}
 
-	response, err := service.controlPlaneClient.Confirm(context.SUPI, controlplane.AuthenticationRequest{
+	response, err := service.controlPlaneClient.Confirm(ctx, context.SUPI, controlplane.AuthenticationRequest{
 		ResStar:    resStar,
 		EapPayload: eapPayload,
 	})

@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"path/filepath"
@@ -18,7 +19,7 @@ type stubControlPlaneClient struct {
 	confirmErr       error
 }
 
-func (client stubControlPlaneClient) Initiate(request controlplane.AuthenticationRequest) (controlplane.AuthenticationResponse, error) {
+func (client stubControlPlaneClient) Initiate(_ context.Context, request controlplane.AuthenticationRequest) (controlplane.AuthenticationResponse, error) {
 	if client.initiateErr != nil {
 		return controlplane.AuthenticationResponse{}, client.initiateErr
 	}
@@ -36,7 +37,7 @@ func (client stubControlPlaneClient) Initiate(request controlplane.Authenticatio
 	}, nil
 }
 
-func (client stubControlPlaneClient) Confirm(supi string, request controlplane.AuthenticationRequest) (controlplane.AuthenticationResponse, error) {
+func (client stubControlPlaneClient) Confirm(_ context.Context, supi string, request controlplane.AuthenticationRequest) (controlplane.AuthenticationResponse, error) {
 	if client.confirmErr != nil {
 		return controlplane.AuthenticationResponse{}, client.confirmErr
 	}
@@ -46,7 +47,7 @@ func (client stubControlPlaneClient) Confirm(supi string, request controlplane.A
 	return controlplane.AuthenticationResponse{Success: true, Message: "authentication successful"}, nil
 }
 
-func (client stubControlPlaneClient) Context(supi string) (controlplane.AuthenticationResponse, error) {
+func (client stubControlPlaneClient) Context(_ context.Context, supi string) (controlplane.AuthenticationResponse, error) {
 	return controlplane.AuthenticationResponse{}, nil
 }
 
@@ -79,7 +80,7 @@ func TestConfirmShouldNotifyNamfOnSuccessfulAuthentication(t *testing.T) {
 		Status:             "CHALLENGE_SENT",
 	})
 
-	result, err := authService.Confirm("auth-1", "res-star", "")
+	result, err := authService.Confirm(context.Background(), "auth-1", "res-star", "")
 	if err != nil {
 		t.Fatalf("Confirm() error = %v", err)
 	}
@@ -115,6 +116,7 @@ func TestCreateUEAuthenticationShouldExposeFiveGAkaLinkForFiveGAka(t *testing.T)
 	authService := NewAuthService(stubControlPlaneClient{}, nil)
 
 	context, err := authService.CreateUEAuthentication(
+		context.Background(),
 		"imsi-250010000000001",
 		"5G:mnc001.mcc001.3gppnetwork.org",
 		authTypeFiveGAka,
@@ -141,6 +143,7 @@ func TestCreateUEAuthenticationShouldRejectUnsupportedAuthType(t *testing.T) {
 	authService := NewAuthService(stubControlPlaneClient{}, nil)
 
 	_, err := authService.CreateUEAuthentication(
+		context.Background(),
 		"imsi-250010000000001",
 		"5G:mnc001.mcc001.3gppnetwork.org",
 		"AKA_TLS",
@@ -162,6 +165,7 @@ func TestCreateUEAuthenticationShouldExposeEapSessionLinkForEapAkaPrime(t *testi
 	}, nil)
 
 	context, err := authService.CreateUEAuthentication(
+		context.Background(),
 		"imsi-250010000000002",
 		"5G:mnc001.mcc001.3gppnetwork.org",
 		"EAP_AKA_PRIME",
@@ -193,7 +197,7 @@ func TestLookupDeleteAndConfirmShouldShareContextNotFoundError(t *testing.T) {
 	deleteErr := authService.Delete("missing")
 	assertAPIError(t, deleteErr, http.StatusNotFound, contextNotFoundCause, "authentication context not found")
 
-	_, confirmErr := authService.Confirm("missing", "deadbeef", "")
+	_, confirmErr := authService.Confirm(context.Background(), "missing", "deadbeef", "")
 	assertAPIError(t, confirmErr, http.StatusNotFound, contextNotFoundCause, "authentication context not found")
 }
 
@@ -201,6 +205,7 @@ func TestDeleteShouldReturnContextNotFoundAfterContextIsRemoved(t *testing.T) {
 	authService := NewAuthService(stubControlPlaneClient{}, nil)
 
 	context, err := authService.CreateUEAuthentication(
+		context.Background(),
 		"imsi-250010000000001",
 		"5G:mnc001.mcc001.3gppnetwork.org",
 		authTypeFiveGAka,
@@ -231,7 +236,7 @@ func TestConfirmShouldMapControlPlaneAuthenticationRejectedError(t *testing.T) {
 		SUPI:      "imsi-250010000000001",
 	})
 
-	_, err := authService.Confirm("auth-1", "deadbeef", "")
+	_, err := authService.Confirm(context.Background(), "auth-1", "deadbeef", "")
 	assertAPIError(t, err, http.StatusUnauthorized, "AUTHENTICATION_REJECTED", "RES* verification failed")
 }
 
@@ -244,6 +249,7 @@ func TestLookupShouldReturnPersistedContextAcrossServiceRecreation(t *testing.T)
 
 	firstService := NewAuthServiceWithStore(stubControlPlaneClient{}, nil, store)
 	created, err := firstService.CreateUEAuthentication(
+		context.Background(),
 		"imsi-250010000000001",
 		"5G:mnc001.mcc001.3gppnetwork.org",
 		authTypeFiveGAka,
@@ -278,6 +284,7 @@ func TestLookupShouldReturnContextNotFoundAfterTTLExpiration(t *testing.T) {
 	authService := NewAuthServiceWithStoreAndTTL(stubControlPlaneClient{}, nil, NewInMemoryAuthContextStore(), 20*time.Millisecond)
 
 	created, err := authService.CreateUEAuthentication(
+		context.Background(),
 		"imsi-250010000000001",
 		"5G:mnc001.mcc001.3gppnetwork.org",
 		authTypeFiveGAka,
@@ -305,6 +312,7 @@ func TestConfirmShouldReturnContextNotFoundAfterTTLExpiration(t *testing.T) {
 	authService := NewAuthServiceWithStoreAndTTL(stubControlPlaneClient{}, nil, NewInMemoryAuthContextStore(), 20*time.Millisecond)
 
 	created, err := authService.CreateUEAuthentication(
+		context.Background(),
 		"imsi-250010000000001",
 		"5G:mnc001.mcc001.3gppnetwork.org",
 		authTypeFiveGAka,
@@ -316,7 +324,7 @@ func TestConfirmShouldReturnContextNotFoundAfterTTLExpiration(t *testing.T) {
 
 	time.Sleep(50 * time.Millisecond)
 
-	_, confirmErr := authService.Confirm(created.AuthCtxID, "deadbeef", "")
+	_, confirmErr := authService.Confirm(context.Background(), created.AuthCtxID, "deadbeef", "")
 	assertAPIError(t, confirmErr, http.StatusNotFound, contextNotFoundCause, "authentication context not found")
 }
 

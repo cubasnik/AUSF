@@ -14,6 +14,7 @@ import (
 	"github.com/alexey/ausf/microservices/internal/metrics"
 	"github.com/alexey/ausf/microservices/internal/namf"
 	"github.com/alexey/ausf/microservices/internal/service"
+	"github.com/alexey/ausf/microservices/internal/tracing"
 )
 
 func main() {
@@ -23,6 +24,11 @@ func main() {
 
 	reg := metrics.NewRegistry()
 	api.SetDefaultRegistry(reg)
+
+	exporter := tracing.NewExporter(appConfig.OTLPEndpoint, "ausf-microservice")
+	defer exporter.Shutdown()
+	tracer := tracing.NewTracer("ausf-microservice", exporter)
+	api.SetTracer(tracer)
 
 	controlPlaneClient := controlplane.NewClientWithBreaker(
 		appConfig.ControlPlaneBaseURL,

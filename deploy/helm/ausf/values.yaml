@@ -38,6 +38,8 @@ microservice:
     AUSF_AUTH_CONTEXT_STORE_FILE: "/data/ausf-auth-contexts.json"
     AUSF_CONTROL_PLANE_BREAKER_FAILURES: "5"
     AUSF_CONTROL_PLANE_BREAKER_TIMEOUT_SECONDS: "10"
+    # Set to e.g. http://otel-collector:4318 to enable OTLP/HTTP tracing export
+    AUSF_OTLP_ENDPOINT: ""
 
   # Reference to a pre-existing Secret whose keys are merged into env.
   # Leave empty to skip.
