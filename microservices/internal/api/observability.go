@@ -173,5 +173,3 @@ func (recorder *statusRecorder) WriteHeader(statusCode int) {
 	recorder.statusCode = statusCode
 	recorder.ResponseWriter.WriteHeader(statusCode)
 }
-
-
