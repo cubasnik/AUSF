@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"sync/atomic"
 	"testing"
+	"time"
 )
 
 func TestClientShouldRetryTransientServerFailure(t *testing.T) {
@@ -170,4 +171,42 @@ func TestConfirmShouldReturnUnauthorizedWhenAuthenticationIsRejected(t *testing.
 		t.Fatalf("requests = %d, want 1", got)
 	}
 	_ = fmt.Sprintf("%v", apiErr)
+}
+
+func TestClientShouldReturnUnavailableWhenCircuitBreakerIsOpen(t *testing.T) {
+	var requests int32
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		atomic.AddInt32(&requests, 1)
+		writer.WriteHeader(http.StatusBadGateway)
+		_, _ = writer.Write([]byte(`{"message":"upstream unavailable"}`))
+	}))
+	defer server.Close()
+
+	client := NewClient(server.URL)
+	client.breaker = newCircuitBreaker(1, time.Minute)
+
+	_, firstErr := client.Initiate(AuthenticationRequest{SUPI: "imsi-250010000000001", ServingNetworkName: "5G:mnc001.mcc001.3gppnetwork.org"})
+	if firstErr == nil {
+		t.Fatal("first Initiate() error = nil, want error")
+	}
+
+	_, secondErr := client.Initiate(AuthenticationRequest{SUPI: "imsi-250010000000001", ServingNetworkName: "5G:mnc001.mcc001.3gppnetwork.org"})
+	if secondErr == nil {
+		t.Fatal("second Initiate() error = nil, want error")
+	}
+
+	apiErr, ok := secondErr.(APIError)
+	if !ok {
+		t.Fatalf("error type = %T, want APIError", secondErr)
+	}
+	if apiErr.StatusCode != http.StatusServiceUnavailable {
+		t.Fatalf("status code = %d, want %d", apiErr.StatusCode, http.StatusServiceUnavailable)
+	}
+	if apiErr.ErrorCode != "CONTROL_PLANE_UNAVAILABLE" {
+		t.Fatalf("error code = %s, want CONTROL_PLANE_UNAVAILABLE", apiErr.ErrorCode)
+	}
+
+	if got := atomic.LoadInt32(&requests); got != maxAttempts {
+		t.Fatalf("requests = %d, want %d", got, maxAttempts)
+	}
 }

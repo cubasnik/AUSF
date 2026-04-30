@@ -120,10 +120,11 @@ Example `ProblemDetails` error:
 | Method and path | Success response | Failure responses |
 | --- | --- | --- |
 | `GET /healthz` | `200 OK`; body: `{"status":"ok"}` | No endpoint-specific `ProblemDetails` contract; failures are generic transport/runtime failures |
-| `POST /nausf-auth/v1/ue-authentications` | `201 Created`; `Location` header set to `/nausf-auth/v1/ue-authentications/{authCtxId}`; body contains `authCtxId`, `supi`, `authType`, `status=CHALLENGE_SENT`, and either `5gAuthData` for `5G_AKA` or `eapSession` for `EAP_AKA_PRIME` | `400 MALFORMED_REQUEST`; `400 MANDATORY_IE_MISSING`; `400 INVALID_NOTIFICATION_URI`; `400 UNSUPPORTED_AUTH_TYPE`; `404 SUBSCRIBER_NOT_FOUND`; `502 CONTROL_PLANE_UNAVAILABLE`; `405 METHOD_NOT_ALLOWED` |
+| `GET /metrics` | `200 OK`; body: Prometheus text exposition for AUSF HTTP request counters and latency summaries | No endpoint-specific `ProblemDetails` contract |
+| `POST /nausf-auth/v1/ue-authentications` | `201 Created`; `Location` header set to `/nausf-auth/v1/ue-authentications/{authCtxId}`; body contains `authCtxId`, `supi`, `authType`, `status=CHALLENGE_SENT`, and either `5gAuthData` for `5G_AKA` or `eapSession` for `EAP_AKA_PRIME` | `400 MALFORMED_REQUEST`; `400 MANDATORY_IE_MISSING`; `400 INVALID_NOTIFICATION_URI`; `400 UNSUPPORTED_AUTH_TYPE`; `404 SUBSCRIBER_NOT_FOUND`; `502/503 CONTROL_PLANE_UNAVAILABLE`; `405 METHOD_NOT_ALLOWED` |
 | `GET /nausf-auth/v1/ue-authentications/{authCtxId}` | `200 OK`; body contains the currently stored auth context for `authCtxId` | `404 CONTEXT_NOT_FOUND` |
-| `POST /nausf-auth/v1/ue-authentications/{authCtxId}/5g-aka-confirmation` | `200 OK`; body contains `authCtxId`, `supi`, `authResult=SUCCESS`, `kseaf`, and confirmation `message` | `400 MALFORMED_REQUEST`; `400 INVALID_CONFIRMATION_PAYLOAD`; `404 CONTEXT_NOT_FOUND`; `401 AUTHENTICATION_REJECTED`; `502 CONTROL_PLANE_UNAVAILABLE` |
-| `POST /nausf-auth/v1/ue-authentications/{authCtxId}/eap-session` | `200 OK`; body contains `authCtxId`, `supi`, `authResult=SUCCESS`, `kseaf`, and confirmation `message` | `400 MALFORMED_REQUEST`; `400 INVALID_CONFIRMATION_PAYLOAD`; `404 CONTEXT_NOT_FOUND`; `401 AUTHENTICATION_REJECTED`; `502 CONTROL_PLANE_UNAVAILABLE` |
+| `POST /nausf-auth/v1/ue-authentications/{authCtxId}/5g-aka-confirmation` | `200 OK`; body contains `authCtxId`, `supi`, `authResult=SUCCESS`, `kseaf`, and confirmation `message` | `400 MALFORMED_REQUEST`; `400 INVALID_CONFIRMATION_PAYLOAD`; `404 CONTEXT_NOT_FOUND`; `401 AUTHENTICATION_REJECTED`; `502/503 CONTROL_PLANE_UNAVAILABLE` |
+| `POST /nausf-auth/v1/ue-authentications/{authCtxId}/eap-session` | `200 OK`; body contains `authCtxId`, `supi`, `authResult=SUCCESS`, `kseaf`, and confirmation `message` | `400 MALFORMED_REQUEST`; `400 INVALID_CONFIRMATION_PAYLOAD`; `404 CONTEXT_NOT_FOUND`; `401 AUTHENTICATION_REJECTED`; `502/503 CONTROL_PLANE_UNAVAILABLE` |
 | `DELETE /nausf-auth/v1/ue-authentications/{authCtxId}` | `204 No Content`; response body omitted | `404 CONTEXT_NOT_FOUND` |
 
 Additional route behavior:
@@ -134,6 +135,8 @@ Additional route behavior:
 - `5g-aka-confirmation` requires `resStar` and rejects `eapPayload` with `400 INVALID_CONFIRMATION_PAYLOAD`.
 - `eap-session` requires `eapPayload` and rejects `resStar` with `400 INVALID_CONFIRMATION_PAYLOAD`.
 - The current Java -> Go propagated failure causes are `SUBSCRIBER_NOT_FOUND`, `AUTHENTICATION_REJECTED`, `CONTEXT_NOT_FOUND`, and `CONTROL_PLANE_UNAVAILABLE`.
+- All Go HTTP responses include `X-Trace-Id` and `traceparent` headers. Request logs include the same trace identifier in `trace_id=...` format.
+- The Go control-plane HTTP client now uses a built-in circuit breaker: repeated transport/5xx failures open the breaker and subsequent calls fail fast with `503 CONTROL_PLANE_UNAVAILABLE` until the cooldown window elapses.
 
 ### Confirmed scenarios
 
@@ -436,6 +439,12 @@ Important runtime variables:
 - `AUSF_AUTH_CONTEXT_STORE_FILE` (optional) sets the path to a JSON file where the Go AUSF service persists in-flight auth contexts. When set, contexts survive a container restart. When unset, contexts are stored in-memory only.
 - `AUSF_AUTH_CONTEXT_TTL_SECONDS` (optional, default unlimited) sets the TTL in seconds for auth contexts. Contexts older than this value are treated as expired and return `404 CONTEXT_NOT_FOUND`.
 
+Observability endpoints and headers:
+
+- `GET /metrics` returns Prometheus-compatible metrics for request counts and latency.
+- `X-Trace-Id` is returned on every Go API response.
+- `traceparent` is returned on every Go API response and accepted on incoming requests.
+
 When `notificationUri` is provided on the create request, the Go AUSF service uses that per-session callback template in preference to the global `AUSF_NAMF_BASE_URL`. The `{authCtxId}` placeholder is replaced with the generated authentication context identifier before the Namf callback is sent.
 
 When `AUSF_NNRF_BASE_URL` is set and `AUSF_UDM_BASE_URL` is empty, the control-plane first calls:
@@ -560,9 +569,9 @@ The backlog below is ordered by priority. Items are grouped into three horizons.
 
 | # | Item | Layer | Why |
 |---|------|-------|-----|
-| 7 | Add circuit breaker (e.g. `failsafe-go` or Resilience4j) between Go↔Java and Java↔UDM | Go + Java | Prevent cascade failures; required for the `502 CONTROL_PLANE_UNAVAILABLE` path to be reliably bounded |
+| 7 | Add circuit breaker between Go↔Java and Java↔UDM | Go + Java | Go↔Java is implemented with fail-fast behavior after repeated 5xx/transport failures; Java↔UDM side is still pending |
 | 8 | Add distributed tracing (OpenTelemetry) | Go + Java | Correlate requests across the three-service boundary for debugging and SLA monitoring |
-| 9 | Add Prometheus metrics endpoint (`/metrics`) | Go microservice | Expose request rates, latency histograms, and auth-result counters |
+| 9 | Expand `/metrics` coverage | Go microservice | Base `/metrics` endpoint is implemented in Go (request count and latency); next step is auth-result/domain metrics |
 | 10 | Add structured JSON logging with trace-ID propagation | Go + Java | Replace unstructured log lines with machine-parseable entries |
 | 11 | Harden auth context TTL: persist TTL metadata across restarts and test boundary conditions | Go microservice | Current TTL is computed from in-memory creation time; a restarted service loses the original creation timestamp |
 

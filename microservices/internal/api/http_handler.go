@@ -32,9 +32,10 @@ func NewHandler(authService *service.AuthService) Handler {
 func (handler Handler) Routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", handler.health)
+	mux.HandleFunc("/metrics", handler.metrics)
 	mux.HandleFunc("/nausf-auth/v1/ue-authentications", handler.createUEAuthentication)
 	mux.HandleFunc("/nausf-auth/v1/ue-authentications/", handler.authContextRoutes)
-	return mux
+	return withObservability(mux)
 }
 
 func (handler Handler) health(writer http.ResponseWriter, _ *http.Request) {

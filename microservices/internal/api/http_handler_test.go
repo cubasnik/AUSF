@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/alexey/ausf/microservices/internal/controlplane"
@@ -62,6 +63,40 @@ func TestCreateUEAuthenticationShouldRejectInvalidNotificationURI(t *testing.T) 
 	}
 	if problem.Cause != "INVALID_NOTIFICATION_URI" {
 		t.Fatalf("cause = %s, want INVALID_NOTIFICATION_URI", problem.Cause)
+	}
+}
+
+func TestRoutesShouldExposePrometheusMetrics(t *testing.T) {
+	handler := NewHandler(service.NewAuthService(stubControlPlaneClient{}, nil)).Routes()
+	request := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	response := httptest.NewRecorder()
+
+	handler.ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusOK)
+	}
+	body := response.Body.String()
+	if !strings.Contains(body, "ausf_http_requests_total") {
+		t.Fatalf("metrics body does not contain ausf_http_requests_total")
+	}
+}
+
+func TestRoutesShouldReturnTraceHeaders(t *testing.T) {
+	handler := NewHandler(service.NewAuthService(stubControlPlaneClient{}, nil)).Routes()
+	request := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+	response := httptest.NewRecorder()
+
+	handler.ServeHTTP(response, request)
+
+	traceID := response.Header().Get(traceHeaderName)
+	if len(traceID) != 32 {
+		t.Fatalf("trace id length = %d, want 32", len(traceID))
+	}
+
+	traceparent := response.Header().Get(traceparentHeader)
+	if !strings.HasPrefix(traceparent, "00-") {
+		t.Fatalf("traceparent = %s, want OpenTelemetry format", traceparent)
 	}
 }
 

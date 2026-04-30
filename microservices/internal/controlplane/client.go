@@ -3,21 +3,27 @@ package controlplane
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 )
 
 const (
 	maxAttempts = 3
 	baseBackoff = 200 * time.Millisecond
+
+	breakerTimeout             = 10 * time.Second
+	breakerConsecutiveFailures = 5
 )
 
 type Client struct {
 	baseURL    string
 	httpClient *http.Client
+	breaker    *circuitBreaker
 }
 
 type AuthenticationRequest struct {
@@ -58,6 +64,7 @@ func NewClient(baseURL string) *Client {
 		httpClient: &http.Client{
 			Timeout: 5 * time.Second,
 		},
+		breaker: newCircuitBreaker(breakerConsecutiveFailures, breakerTimeout),
 	}
 }
 
@@ -74,6 +81,31 @@ func (client *Client) Context(supi string) (AuthenticationResponse, error) {
 }
 
 func (client *Client) doJSON(method string, path string, payload any) (AuthenticationResponse, error) {
+	if !client.breaker.allow() {
+		return AuthenticationResponse{}, APIError{
+			StatusCode: http.StatusServiceUnavailable,
+			Message:    "control-plane circuit breaker is open",
+			ErrorCode:  "CONTROL_PLANE_UNAVAILABLE",
+		}
+	}
+
+	response, err := client.doJSONWithRetries(method, path, payload)
+	if err != nil {
+		var apiErr APIError
+		if errors.As(err, &apiErr) && apiErr.StatusCode < http.StatusInternalServerError {
+			client.breaker.onSuccess()
+			return AuthenticationResponse{}, err
+		}
+
+		client.breaker.onFailure()
+		return AuthenticationResponse{}, err
+	}
+
+	client.breaker.onSuccess()
+	return response, nil
+}
+
+func (client *Client) doJSONWithRetries(method string, path string, payload any) (AuthenticationResponse, error) {
 	var body []byte
 	var err error
 	if payload != nil {
@@ -147,4 +179,52 @@ func decodeResponse(response *http.Response) (AuthenticationResponse, error) {
 
 func backoffDuration(attempt int) time.Duration {
 	return time.Duration(attempt) * baseBackoff
+}
+
+type circuitBreaker struct {
+	mu                  sync.Mutex
+	consecutiveFailures int
+	openedAt            time.Time
+	failureThreshold    int
+	openTimeout         time.Duration
+}
+
+func newCircuitBreaker(failureThreshold int, openTimeout time.Duration) *circuitBreaker {
+	return &circuitBreaker{
+		failureThreshold: failureThreshold,
+		openTimeout:      openTimeout,
+	}
+}
+
+func (breaker *circuitBreaker) allow() bool {
+	breaker.mu.Lock()
+	defer breaker.mu.Unlock()
+
+	if breaker.openedAt.IsZero() {
+		return true
+	}
+	if time.Since(breaker.openedAt) >= breaker.openTimeout {
+		breaker.openedAt = time.Time{}
+		breaker.consecutiveFailures = 0
+		return true
+	}
+	return false
+}
+
+func (breaker *circuitBreaker) onSuccess() {
+	breaker.mu.Lock()
+	defer breaker.mu.Unlock()
+
+	breaker.consecutiveFailures = 0
+	breaker.openedAt = time.Time{}
+}
+
+func (breaker *circuitBreaker) onFailure() {
+	breaker.mu.Lock()
+	defer breaker.mu.Unlock()
+
+	breaker.consecutiveFailures++
+	if breaker.consecutiveFailures >= breaker.failureThreshold {
+		breaker.openedAt = time.Now()
+	}
 }
