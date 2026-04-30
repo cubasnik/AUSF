@@ -231,7 +231,7 @@ func (service *AuthService) contextExpired(context AuthContext) bool {
 		return false
 	}
 	if context.CreatedAt.IsZero() {
-		return false
+		return true
 	}
 	return time.Since(context.CreatedAt) > service.contextTTL
 }

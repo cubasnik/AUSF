@@ -320,6 +320,33 @@ func TestConfirmShouldReturnContextNotFoundAfterTTLExpiration(t *testing.T) {
 	assertAPIError(t, confirmErr, http.StatusNotFound, contextNotFoundCause, "authentication context not found")
 }
 
+func TestLookupShouldExpireLegacyContextWithoutCreatedAtWhenTTLIsEnabled(t *testing.T) {
+	authService := NewAuthServiceWithStoreAndTTL(stubControlPlaneClient{}, nil, NewInMemoryAuthContextStore(), time.Minute)
+
+	legacyContext := AuthContext{
+		AuthCtxID:          "auth-legacy",
+		SUPI:               "imsi-250010000000001",
+		ServingNetworkName: "5G:mnc001.mcc001.3gppnetwork.org",
+		AuthType:           authTypeFiveGAka,
+		Status:             authStatusChallengeSent,
+		CreatedAt:          time.Time{},
+	}
+	if err := authService.store.Save(legacyContext); err != nil {
+		t.Fatalf("save context error = %v", err)
+	}
+
+	_, err := authService.Lookup(legacyContext.AuthCtxID)
+	assertAPIError(t, err, http.StatusNotFound, contextNotFoundCause, "authentication context not found")
+
+	_, ok, getErr := authService.store.Get(legacyContext.AuthCtxID)
+	if getErr != nil {
+		t.Fatalf("store.Get() error = %v", getErr)
+	}
+	if ok {
+		t.Fatalf("store still contains expired legacy auth context %s", legacyContext.AuthCtxID)
+	}
+}
+
 func TestMapControlPlaneErrorShouldUseFallbackCauseWhenErrorCodeIsMissing(t *testing.T) {
 	err := mapControlPlaneError(controlplane.APIError{
 		StatusCode: http.StatusBadGateway,
@@ -357,6 +384,9 @@ func assertAPIError(t *testing.T, err error, wantStatus int, wantCause string, w
 
 func mustSaveContext(t *testing.T, authService *AuthService, context AuthContext) {
 	t.Helper()
+	if context.CreatedAt.IsZero() {
+		context.CreatedAt = time.Now().UTC()
+	}
 	if err := authService.store.Save(context); err != nil {
 		t.Fatalf("save context error = %v", err)
 	}
