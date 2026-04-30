@@ -44,6 +44,28 @@ The Go service exposes a simplified AUSF flow under `nausf-auth`:
 The diagram below shows how the four runtime components interact and which protocol / interface is carried on each arrow.
 
 ```mermaid
+%%{init: {
+  "theme": "base",
+  "themeVariables": {
+    "background":            "#f5f7fa",
+    "actorBkg":              "#1e3a5f",
+    "actorBorder":           "#4fc3f7",
+    "actorTextColor":        "#ffffff",
+    "actorLineColor":        "#90caf9",
+    "signalColor":           "#1565c0",
+    "signalTextColor":       "#0d2444",
+    "activationBkgColor":    "#bbdefb",
+    "activationBorderColor": "#1565c0",
+    "sequenceNumberColor":   "#ffffff",
+    "noteBkgColor":          "#e3f2fd",
+    "noteBorderColor":       "#42a5f5",
+    "noteTextColor":         "#0d2444",
+    "labelBoxBkgColor":      "#e8f5e9",
+    "labelBoxBorderColor":   "#66bb6a",
+    "labelTextColor":        "#1b5e20",
+    "loopTextColor":         "#1b5e20"
+  }
+}}%%
 sequenceDiagram
     autonumber
     participant AMF  as AMF<br/>(mock-amf)
