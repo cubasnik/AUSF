@@ -13,6 +13,8 @@ type Config struct {
 	NamfBaseURL           string
 	AuthContextStoreFile  string
 	AuthContextTTLSeconds int
+	BreakerFailures       int
+	BreakerTimeoutSeconds int
 }
 
 func Load() Config {
@@ -44,7 +46,21 @@ func Load() Config {
 		}
 	}
 
-	return Config{Host: host, Port: port, ControlPlaneBaseURL: controlPlaneBaseURL, NamfBaseURL: namfBaseURL, AuthContextStoreFile: authContextStoreFile, AuthContextTTLSeconds: authContextTTLSeconds}
+	breakerFailures := 5
+	if rawFailures := os.Getenv("AUSF_CONTROL_PLANE_BREAKER_FAILURES"); rawFailures != "" {
+		if parsedFailures, err := strconv.Atoi(rawFailures); err == nil && parsedFailures > 0 {
+			breakerFailures = parsedFailures
+		}
+	}
+
+	breakerTimeoutSeconds := 10
+	if rawTimeout := os.Getenv("AUSF_CONTROL_PLANE_BREAKER_TIMEOUT_SECONDS"); rawTimeout != "" {
+		if parsedTimeout, err := strconv.Atoi(rawTimeout); err == nil && parsedTimeout > 0 {
+			breakerTimeoutSeconds = parsedTimeout
+		}
+	}
+
+	return Config{Host: host, Port: port, ControlPlaneBaseURL: controlPlaneBaseURL, NamfBaseURL: namfBaseURL, AuthContextStoreFile: authContextStoreFile, AuthContextTTLSeconds: authContextTTLSeconds, BreakerFailures: breakerFailures, BreakerTimeoutSeconds: breakerTimeoutSeconds}
 }
 
 func (config Config) Address() string {

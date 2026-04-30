@@ -16,8 +16,8 @@ const (
 	maxAttempts = 3
 	baseBackoff = 200 * time.Millisecond
 
-	breakerTimeout             = 10 * time.Second
-	breakerConsecutiveFailures = 5
+	defaultBreakerTimeout             = 10 * time.Second
+	defaultBreakerConsecutiveFailures = 5
 )
 
 type Client struct {
@@ -59,12 +59,23 @@ func (error APIError) Error() string {
 }
 
 func NewClient(baseURL string) *Client {
+	return NewClientWithBreaker(baseURL, defaultBreakerConsecutiveFailures, defaultBreakerTimeout)
+}
+
+func NewClientWithBreaker(baseURL string, failures int, timeout time.Duration) *Client {
+	if failures <= 0 {
+		failures = defaultBreakerConsecutiveFailures
+	}
+	if timeout <= 0 {
+		timeout = defaultBreakerTimeout
+	}
+
 	return &Client{
 		baseURL: strings.TrimRight(baseURL, "/"),
 		httpClient: &http.Client{
 			Timeout: 5 * time.Second,
 		},
-		breaker: newCircuitBreaker(breakerConsecutiveFailures, breakerTimeout),
+		breaker: newCircuitBreaker(failures, timeout),
 	}
 }
 

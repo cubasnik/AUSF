@@ -14,7 +14,11 @@ import (
 
 func main() {
 	appConfig := config.Load()
-	controlPlaneClient := controlplane.NewClient(appConfig.ControlPlaneBaseURL)
+	controlPlaneClient := controlplane.NewClientWithBreaker(
+		appConfig.ControlPlaneBaseURL,
+		appConfig.BreakerFailures,
+		time.Duration(appConfig.BreakerTimeoutSeconds)*time.Second,
+	)
 	namfClient := namf.NewClient(appConfig.NamfBaseURL)
 	store, err := service.NewFileAuthContextStore(appConfig.AuthContextStoreFile)
 	if err != nil {
