@@ -39,6 +39,65 @@ The Go service exposes a simplified AUSF flow under `nausf-auth`:
 4. `POST /nausf-auth/v1/ue-authentications/{authCtxId}/eap-session`
 5. `DELETE /nausf-auth/v1/ue-authentications/{authCtxId}`
 
+### Protocol interaction diagram
+
+The diagram below shows how the four runtime components interact and which protocol / interface is carried on each arrow.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant AMF  as AMF<br/>(mock-amf)
+    participant AUSF as AUSF Go<br/>microservice
+    participant NRF  as NRF<br/>(mock-nrf)
+    participant CP   as Control-Plane<br/>(Java)
+    participant UDM  as UDM<br/>(mock-udm)
+
+    Note over AUSF,NRF: Startup — Nnrf_NFManagement (HTTP PUT /nnrf-nfm/v1/nf-instances/{id})
+    AUSF->>NRF: PUT /nnrf-nfm/v1/nf-instances/{id}<br/>nfType=AUSF, nfStatus=REGISTERED
+    NRF-->>AUSF: 201 Created
+
+    loop Every heartbeat-interval-seconds (default 30 s)
+        AUSF->>NRF: PATCH /nnrf-nfm/v1/nf-instances/{id}<br/>nfStatus=REGISTERED
+        NRF-->>AUSF: 200 OK
+    end
+
+    Note over CP,NRF: Control-plane discovers UDM — Nnrf_NFDiscovery (HTTP GET)
+    CP->>NRF: GET /nnrf-disc/v1/nf-instances?target-nf-type=UDM
+    NRF-->>CP: 200 OK — NF instance list with nudm-ueau apiPrefix
+
+    Note over AMF,UDM: 5G-AKA authentication flow — Nausf_UEAuthentication (HTTP/2 SBI)
+    AMF->>AUSF: POST /nausf-auth/v1/ue-authentications<br/>supiOrSuci, authType=5G_AKA
+    AUSF->>CP: POST /ausf/v1/ue-authentications<br/>(internal HTTP, supi, servingNetwork)
+    CP->>UDM: POST /nudm-ueau/v1/{supi}/security-information/generate-auth-data<br/>Nudm_UEAuthentication (HTTP/2 SBI)
+    UDM-->>CP: 200 OK — AuthenticationInfoResult (RAND, AUTN, XRES*, CK', IK')
+    CP-->>AUSF: 200 OK — AV (RAND, AUTN, HXRES*, KAUSF)
+    AUSF-->>AMF: 201 Created — UEAuthenticationCtx (authCtxId, 5gAuthData)
+
+    AMF->>AUSF: POST /nausf-auth/v1/ue-authentications/{authCtxId}/5g-aka-confirmation<br/>resStar
+    AUSF->>CP: POST /ausf/v1/ue-authentications/{authCtxId}/confirm<br/>(internal HTTP)
+    CP-->>AUSF: 200 OK — result=SUCCESS, KSEAF
+    AUSF-->>AMF: 200 OK — ConfirmationData (authResult=SUCCESS, kseaf)
+    AUSF-)AMF: POST {notificationUri}<br/>Namf_Communication — auth status callback
+
+    Note over AMF,UDM: EAP-AKA' authentication flow
+    AMF->>AUSF: POST /nausf-auth/v1/ue-authentications<br/>supiOrSuci, authType=EAP_AKA_PRIME
+    AUSF->>CP: POST /ausf/v1/ue-authentications (internal HTTP)
+    CP->>UDM: POST /nudm-ueau/v1/{supi}/security-information/generate-auth-data
+    UDM-->>CP: 200 OK — AuthenticationInfoResult
+    CP-->>AUSF: 200 OK — EAP payload (EAP-Request/AKA'-Challenge)
+    AUSF-->>AMF: 201 Created — UEAuthenticationCtx (authCtxId, eapSession)
+
+    AMF->>AUSF: POST /nausf-auth/v1/ue-authentications/{authCtxId}/eap-session<br/>eapPayload
+    AUSF->>CP: POST /ausf/v1/ue-authentications/{authCtxId}/confirm (internal HTTP)
+    CP-->>AUSF: 200 OK — result=SUCCESS, KSEAF
+    AUSF-->>AMF: 200 OK — ConfirmationData (authResult=SUCCESS, kseaf)
+    AUSF-)AMF: POST {notificationUri}<br/>Namf_Communication — auth status callback
+
+    Note over AUSF,NRF: Shutdown — Nnrf_NFManagement (HTTP DELETE)
+    AUSF->>NRF: DELETE /nnrf-nfm/v1/nf-instances/{id}
+    NRF-->>AUSF: 204 No Content
+```
+
 Supported authentication modes:
 
 - `5G_AKA`
