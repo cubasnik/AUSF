@@ -1,0 +1,16 @@
+apiVersion: v2
+name: ausf
+description: >
+  5G AUSF (Authentication Server Function) — polyglot reference implementation.
+  Deploys the Go microservice front-end, Java Spring Boot control-plane, and
+  optional mock network functions (AMF, NRF, UDM).
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+keywords:
+  - 5g
+  - ausf
+  - 3gpp
+  - sbi
+maintainers:
+  - name: AUSF team

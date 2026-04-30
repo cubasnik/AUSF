@@ -1,9 +1,11 @@
 package com.ausf.controlplane.udm;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.client.RestClient;
@@ -66,6 +68,59 @@ public class NnrfClient {
             "NRF discovery failed: " + (lastException == null ? "unknown error" : lastException.getMessage()),
             lastException
         );
+    }
+
+    // ── NRF NFm: register, heartbeat, deregister ─────────────────────────────
+
+    /**
+     * Registers this NF instance with the NRF.
+     * PUT /nnrf-nfm/v1/nf-instances/{nfInstanceId}
+     */
+    void registerNfProfile(String nfInstanceId, Map<String, Object> nfProfile) {
+        if (baseUrl.isBlank()) return;
+        restClientBuilder.baseUrl(baseUrl).build()
+            .put()
+            .uri("/nnrf-nfm/v1/nf-instances/" + nfInstanceId)
+            .contentType(MediaType.APPLICATION_JSON)
+            .body(nfProfile)
+            .retrieve()
+            .toBodilessEntity();
+    }
+
+    /**
+     * Sends a heartbeat (NFStatusNotify PATCH) to the NRF.
+     * PATCH /nnrf-nfm/v1/nf-instances/{nfInstanceId}
+     * Body: [{"op":"replace","path":"/nfStatus","value":"REGISTERED"}]
+     */
+    void sendHeartbeat(String nfInstanceId) {
+        if (baseUrl.isBlank()) return;
+        List<Map<String, String>> patch = List.of(
+            Map.of("op", "replace", "path", "/nfStatus", "value", "REGISTERED")
+        );
+        restClientBuilder.baseUrl(baseUrl).build()
+            .patch()
+            .uri("/nnrf-nfm/v1/nf-instances/" + nfInstanceId)
+            .contentType(MediaType.valueOf("application/json-patch+json"))
+            .body(patch)
+            .retrieve()
+            .toBodilessEntity();
+    }
+
+    /**
+     * Deregisters this NF instance from the NRF.
+     * DELETE /nnrf-nfm/v1/nf-instances/{nfInstanceId}
+     */
+    void deregister(String nfInstanceId) {
+        if (baseUrl.isBlank()) return;
+        restClientBuilder.baseUrl(baseUrl).build()
+            .delete()
+            .uri("/nnrf-nfm/v1/nf-instances/" + nfInstanceId)
+            .retrieve()
+            .toBodilessEntity();
+    }
+
+    boolean isConfigured() {
+        return !baseUrl.isBlank();
     }
 
     private String sanitizeBaseUrl(String value) {

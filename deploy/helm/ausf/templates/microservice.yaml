@@ -1,0 +1,174 @@
+{{- $fullname := include "ausf.fullname" . }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $fullname }}-microservice
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "ausf.labels" . | nindent 4 }}
+    {{- include "ausf.microservice.selectorLabels" . | nindent 4 }}
+  {{- with .Values.microservice.podAnnotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  replicas: {{ .Values.microservice.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "ausf.microservice.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "ausf.labels" . | nindent 8 }}
+        {{- include "ausf.microservice.selectorLabels" . | nindent 8 }}
+      {{- with .Values.microservice.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+        - name: microservice
+          image: "{{ .Values.microservice.image.repository }}:{{ .Values.microservice.image.tag }}"
+          imagePullPolicy: {{ .Values.microservice.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.microservice.service.port }}
+              protocol: TCP
+          env:
+            # Static config from values
+            {{- range $key, $val := .Values.microservice.env }}
+            - name: {{ $key }}
+              value: {{ $val | quote }}
+            {{- end }}
+            # Control-plane address resolves to in-cluster Service
+            - name: CONTROL_PLANE_BASE_URL
+              value: "http://{{ $fullname }}-control-plane.{{ .Values.namespace }}.svc.cluster.local:{{ .Values.controlPlane.service.port }}"
+            {{- if .Values.microservice.existingSecret }}
+            # Sensitive values from pre-existing Secret
+            envFrom:
+              - secretRef:
+                  name: {{ .Values.microservice.existingSecret }}
+            {{- end }}
+          {{- if .Values.microservice.persistence.enabled }}
+          volumeMounts:
+            - name: context-store
+              mountPath: /data
+          {{- end }}
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 15
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 3
+            periodSeconds: 10
+            failureThreshold: 2
+          resources:
+            {{- toYaml .Values.microservice.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+      {{- if .Values.microservice.persistence.enabled }}
+      volumes:
+        - name: context-store
+          persistentVolumeClaim:
+            claimName: {{ $fullname }}-microservice-context-store
+      {{- end }}
+      {{- with .Values.microservice.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.microservice.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.microservice.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $fullname }}-microservice
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "ausf.labels" . | nindent 4 }}
+    {{- include "ausf.microservice.selectorLabels" . | nindent 4 }}
+spec:
+  type: {{ .Values.microservice.service.type }}
+  ports:
+    - port: {{ .Values.microservice.service.port }}
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "ausf.microservice.selectorLabels" . | nindent 4 }}
+{{- if .Values.microservice.persistence.enabled }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ $fullname }}-microservice-context-store
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "ausf.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    - {{ .Values.microservice.persistence.accessMode }}
+  {{- if .Values.microservice.persistence.storageClass }}
+  storageClassName: {{ .Values.microservice.persistence.storageClass }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.microservice.persistence.size }}
+{{- end }}
+{{- if .Values.ingress.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ $fullname }}-microservice
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "ausf.labels" . | nindent 4 }}
+  {{- with .Values.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- if .Values.ingress.className }}
+  ingressClassName: {{ .Values.ingress.className }}
+  {{- end }}
+  {{- if .Values.ingress.tls }}
+  tls:
+    {{- toYaml .Values.ingress.tls | nindent 4 }}
+  {{- end }}
+  rules:
+    {{- range .Values.ingress.hosts }}
+    - host: {{ .host | quote }}
+      http:
+        paths:
+          {{- range .paths }}
+          - path: {{ .path }}
+            pathType: {{ .pathType }}
+            backend:
+              service:
+                name: {{ $fullname }}-microservice
+                port:
+                  name: http
+          {{- end }}
+    {{- end }}
+{{- end }}

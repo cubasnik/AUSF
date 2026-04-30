@@ -1,0 +1,137 @@
+# ──────────────────────────────────────────────────────────────────────────────
+# Global
+# ──────────────────────────────────────────────────────────────────────────────
+nameOverride: ""
+fullnameOverride: ""
+
+namespace: ausf-system
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Go microservice (AUSF front-end / SBI gateway)
+# ──────────────────────────────────────────────────────────────────────────────
+microservice:
+  image:
+    repository: ghcr.io/cubasnik/ausf/microservice
+    tag: "1.0.0"
+    pullPolicy: IfNotPresent
+
+  replicaCount: 1
+
+  service:
+    type: ClusterIP
+    port: 8080
+
+  resources:
+    requests:
+      cpu: "50m"
+      memory: "64Mi"
+    limits:
+      cpu: "500m"
+      memory: "128Mi"
+
+  # Environment variables injected into the container.
+  # Sensitive values should be placed in existingSecret instead.
+  env:
+    AUSF_PORT: "8080"
+    AUSF_HOST: "0.0.0.0"
+    AUSF_AUTH_CONTEXT_TTL_SECONDS: "900"
+    AUSF_AUTH_CONTEXT_STORE_FILE: "/data/ausf-auth-contexts.json"
+    AUSF_CONTROL_PLANE_BREAKER_FAILURES: "5"
+    AUSF_CONTROL_PLANE_BREAKER_TIMEOUT_SECONDS: "10"
+
+  # Reference to a pre-existing Secret whose keys are merged into env.
+  # Leave empty to skip.
+  existingSecret: ""
+
+  # Persistent volume for auth-context file store.
+  persistence:
+    enabled: true
+    storageClass: ""
+    size: 100Mi
+    accessMode: ReadWriteOnce
+
+  podAnnotations: {}
+
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Java control-plane
+# ──────────────────────────────────────────────────────────────────────────────
+controlPlane:
+  image:
+    repository: ghcr.io/cubasnik/ausf/control-plane
+    tag: "1.0.0"
+    pullPolicy: IfNotPresent
+
+  replicaCount: 1
+
+  service:
+    type: ClusterIP
+    port: 8081
+
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "256Mi"
+    limits:
+      cpu: "1000m"
+      memory: "512Mi"
+
+  env:
+    SERVER_PORT: "8081"
+    AUSF_UDM_MODE: "http"
+    AUSF_UDM_BREAKER_FAILURES: "5"
+    AUSF_UDM_BREAKER_OPEN_SECONDS: "10"
+
+  existingSecret: ""
+
+  podAnnotations: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Mock network functions (disable in production)
+# ──────────────────────────────────────────────────────────────────────────────
+mocks:
+  enabled: true
+
+  udm:
+    image:
+      repository: ghcr.io/cubasnik/ausf/mock-udm
+      tag: "1.0.0"
+      pullPolicy: IfNotPresent
+    service:
+      port: 8090
+
+  nrf:
+    image:
+      repository: ghcr.io/cubasnik/ausf/mock-nrf
+      tag: "1.0.0"
+      pullPolicy: IfNotPresent
+    service:
+      port: 8091
+
+  amf:
+    image:
+      repository: ghcr.io/cubasnik/ausf/mock-amf
+      tag: "1.0.0"
+      pullPolicy: IfNotPresent
+    service:
+      port: 8092
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Ingress (optional)
+# ──────────────────────────────────────────────────────────────────────────────
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: ausf.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
