@@ -17,9 +17,26 @@ DEFAULT_SMOKE_RUNNER_ENV = {
 
 
 def run_compose_command(arguments: Sequence[str], check: bool = True) -> None:
+    run_compose_subprocess(arguments, check=check)
+
+
+def run_compose_subprocess(
+    arguments: Sequence[str],
+    check: bool = True,
+    capture_output: bool = False,
+    text: bool = False,
+    input: str | None = None,
+) -> subprocess.CompletedProcess:
     command = ["docker", "compose", *arguments]
     print(f"==> {' '.join(command)}", flush=True)
-    subprocess.run(command, cwd=ROOT, check=check)
+    return subprocess.run(
+        command,
+        cwd=ROOT,
+        check=check,
+        capture_output=capture_output,
+        text=text,
+        input=input,
+    )
 
 
 def compose_up(skip_build: bool = False) -> None:

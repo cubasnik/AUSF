@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/alexey/ausf/microservices/internal/transport"
 )
 
 const (
@@ -15,8 +17,9 @@ const (
 )
 
 type Client struct {
-	baseURL    string
-	httpClient *http.Client
+	baseURL     string
+	httpClient  *http.Client
+	bearerToken string
 }
 
 type UEAuthenticationStatusNotification struct {
@@ -29,12 +32,24 @@ type UEAuthenticationStatusNotification struct {
 }
 
 func NewClient(baseURL string) *Client {
-	return &Client{
-		baseURL: strings.TrimRight(baseURL, "/"),
-		httpClient: &http.Client{
-			Timeout: 5 * time.Second,
-		},
+	client, err := NewClientWithTLS(baseURL, transport.TLSClientConfig{}, "")
+	if err != nil {
+		panic(err)
 	}
+	return client
+}
+
+func NewClientWithTLS(baseURL string, tlsClientConfig transport.TLSClientConfig, bearerToken string) (*Client, error) {
+	httpClient, err := transport.NewHTTPClient(5*time.Second, tlsClientConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	return &Client{
+		baseURL:     strings.TrimRight(baseURL, "/"),
+		httpClient:  httpClient,
+		bearerToken: strings.TrimSpace(bearerToken),
+	}, nil
 }
 
 func (client *Client) NotifyUEAuthenticationStatus(notification UEAuthenticationStatusNotification, notificationURI string) error {
@@ -59,6 +74,9 @@ func (client *Client) NotifyUEAuthenticationStatus(notification UEAuthentication
 			return requestErr
 		}
 		request.Header.Set("Content-Type", "application/json")
+		if client.bearerToken != "" {
+			request.Header.Set("Authorization", "Bearer "+client.bearerToken)
+		}
 
 		response, requestErr := client.httpClient.Do(request)
 		if requestErr != nil {

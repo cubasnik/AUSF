@@ -1,0 +1,4 @@
+services:
+  ausf-go:
+    environment:
+      CONTROL_PLANE_TLS_CA_CERT_FILE: /tls/ausf-go.crt

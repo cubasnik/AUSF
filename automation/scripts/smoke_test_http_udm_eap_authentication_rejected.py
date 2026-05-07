@@ -8,7 +8,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from smoke_client import AUSFClient, AUSFError
-from smoke_runtime import AUSF_BASE_URL, MOCK_AMF_BASE_URL, MOCK_NRF_BASE_URL, MOCK_UDM_BASE_URL, load_amf_notifications, wait_for_health
+from smoke_runtime import AUSF_BASE_URL, EAP_AKA_PRIME_RESPONSE_PREFIX, MOCK_AMF_BASE_URL, MOCK_NRF_BASE_URL, MOCK_UDM_BASE_URL, load_amf_notifications, wait_for_health
 
 
 def main() -> int:
@@ -32,11 +32,12 @@ def main() -> int:
     assert challenge["authType"] == "EAP_AKA_PRIME"
 
     try:
-        client.confirm_eap_authentication(challenge["authCtxId"], "EAP-Response/AKA'-Challenge invalid-token")
+        client.confirm_eap_authentication(challenge["authCtxId"], f"{EAP_AKA_PRIME_RESPONSE_PREFIX}invalid-token")
     except AUSFError as error:
         assert error.status_code == 401
         assert error.payload["cause"] == "AUTHENTICATION_REJECTED"
         assert error.payload["detail"] == "EAP-AKA' verification failed"
+        assert error.payload["eapPayload"] == "EAP-Failure"
         print(f"eap-authentication-rejected-error: {error.payload}")
     else:
         raise AssertionError("expected 401 AUTHENTICATION_REJECTED for invalid eapPayload")

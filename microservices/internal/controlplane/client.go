@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/alexey/ausf/microservices/internal/tracing"
+	"github.com/alexey/ausf/microservices/internal/transport"
 )
 
 const (
@@ -24,21 +25,27 @@ const (
 )
 
 type Client struct {
-	baseURL    string
-	httpClient *http.Client
-	breaker    *circuitBreaker
+	baseURL     string
+	httpClient  *http.Client
+	breaker     *circuitBreaker
+	bearerToken string
 }
 
+type TLSClientConfig = transport.TLSClientConfig
+
 type AuthenticationRequest struct {
+	AuthCtxID          string `json:"authCtxId,omitempty"`
 	SUPI               string `json:"supi"`
 	ServingNetworkName string `json:"servingNetworkName,omitempty"`
 	AuthType           string `json:"authType,omitempty"`
 	ResStar            string `json:"resStar,omitempty"`
+	AUTS               string `json:"auts,omitempty"`
 	EapPayload         string `json:"eapPayload,omitempty"`
 }
 
 type AuthenticationResponse struct {
 	Success            bool   `json:"success"`
+	AuthCtxID          string `json:"authCtxId"`
 	SUPI               string `json:"supi"`
 	AuthType           string `json:"authType"`
 	ServingNetworkName string `json:"servingNetworkName"`
@@ -55,6 +62,7 @@ type APIError struct {
 	StatusCode int
 	Message    string
 	ErrorCode  string
+	EapPayload string
 }
 
 func (error APIError) Error() string {
@@ -62,10 +70,22 @@ func (error APIError) Error() string {
 }
 
 func NewClient(baseURL string) *Client {
-	return NewClientWithBreaker(baseURL, defaultBreakerConsecutiveFailures, defaultBreakerTimeout)
+	client, err := NewClientWithTLSAndBreaker(baseURL, TLSClientConfig{}, defaultBreakerConsecutiveFailures, defaultBreakerTimeout, "")
+	if err != nil {
+		panic(err)
+	}
+	return client
 }
 
 func NewClientWithBreaker(baseURL string, failures int, timeout time.Duration) *Client {
+	client, err := NewClientWithTLSAndBreaker(baseURL, TLSClientConfig{}, failures, timeout, "")
+	if err != nil {
+		panic(err)
+	}
+	return client
+}
+
+func NewClientWithTLSAndBreaker(baseURL string, tlsClientConfig TLSClientConfig, failures int, timeout time.Duration, bearerToken string) (*Client, error) {
 	if failures <= 0 {
 		failures = defaultBreakerConsecutiveFailures
 	}
@@ -73,21 +93,25 @@ func NewClientWithBreaker(baseURL string, failures int, timeout time.Duration) *
 		timeout = defaultBreakerTimeout
 	}
 
-	return &Client{
-		baseURL: strings.TrimRight(baseURL, "/"),
-		httpClient: &http.Client{
-			Timeout: 5 * time.Second,
-		},
-		breaker: newCircuitBreaker(failures, timeout),
+	httpClient, err := transport.NewHTTPClient(5*time.Second, transport.TLSClientConfig(tlsClientConfig))
+	if err != nil {
+		return nil, err
 	}
+
+	return &Client{
+		baseURL:     strings.TrimRight(baseURL, "/"),
+		httpClient:  httpClient,
+		breaker:     newCircuitBreaker(failures, timeout),
+		bearerToken: strings.TrimSpace(bearerToken),
+	}, nil
 }
 
 func (client *Client) Initiate(ctx context.Context, request AuthenticationRequest) (AuthenticationResponse, error) {
 	return client.doJSON(ctx, http.MethodPost, "/control-plane/v1/auth/initiate", request)
 }
 
-func (client *Client) Confirm(ctx context.Context, supi string, request AuthenticationRequest) (AuthenticationResponse, error) {
-	return client.doJSON(ctx, http.MethodPost, "/control-plane/v1/auth/"+supi+"/confirm", request)
+func (client *Client) Confirm(ctx context.Context, authCtxID string, request AuthenticationRequest) (AuthenticationResponse, error) {
+	return client.doJSON(ctx, http.MethodPost, "/control-plane/v1/auth/"+authCtxID+"/confirm", request)
 }
 
 func (client *Client) Context(ctx context.Context, supi string) (AuthenticationResponse, error) {
@@ -137,6 +161,9 @@ func (client *Client) doJSONWithRetries(ctx context.Context, method string, path
 		}
 		if payload != nil {
 			httpRequest.Header.Set("Content-Type", "application/json")
+		}
+		if client.bearerToken != "" {
+			httpRequest.Header.Set("Authorization", "Bearer "+client.bearerToken)
 		}
 		if sc := tracing.SpanContextFromContext(ctx); sc.IsValid() {
 			httpRequest.Header.Set("traceparent", sc.Traceparent())
@@ -188,7 +215,7 @@ func decodeResponse(response *http.Response) (AuthenticationResponse, error) {
 		if message == "" {
 			message = fmt.Sprintf("control-plane request failed with status %d", response.StatusCode)
 		}
-		return AuthenticationResponse{}, APIError{StatusCode: response.StatusCode, Message: message, ErrorCode: result.ErrorCode}
+		return AuthenticationResponse{}, APIError{StatusCode: response.StatusCode, Message: message, ErrorCode: result.ErrorCode, EapPayload: result.EapChallenge}
 	}
 
 	return result, nil

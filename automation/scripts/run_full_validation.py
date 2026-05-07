@@ -29,6 +29,7 @@ JAVA_TESTS = [
     "AuthenticationControllerTest",
     "NnrfClientTest",
     "HttpUdmClientTest",
+    "SubscriberSeedInitializerTest",
 ]
 FORCE_DOCKER_JAVA_TESTS = os.environ.get("AUSF_FORCE_DOCKER_JAVA_TESTS", "").strip().lower() in {"1", "true", "yes"}
 
@@ -185,6 +186,15 @@ def main() -> int:
     run_python_step(
         "HTTP UDM happy and negative smoke suite",
         smoke_command,
+    )
+
+    https_smoke_command = [PYTHON, "automation/scripts/run_https_tls_smoke_suite.py"]
+    if skip_smoke_build:
+        https_smoke_command.append("--skip-build")
+
+    run_python_step(
+        "HTTPS TLS happy and negative smoke suite",
+        https_smoke_command,
     )
 
     print("==> full validation completed", flush=True)

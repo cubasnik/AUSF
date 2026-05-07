@@ -15,6 +15,7 @@ import (
 	"github.com/alexey/ausf/microservices/internal/namf"
 	"github.com/alexey/ausf/microservices/internal/service"
 	"github.com/alexey/ausf/microservices/internal/tracing"
+	"github.com/alexey/ausf/microservices/internal/transport"
 )
 
 func main() {
@@ -30,12 +31,28 @@ func main() {
 	tracer := tracing.NewTracer("ausf-microservice", exporter)
 	api.SetTracer(tracer)
 
-	controlPlaneClient := controlplane.NewClientWithBreaker(
+	controlPlaneClient, err := controlplane.NewClientWithTLSAndBreaker(
 		appConfig.ControlPlaneBaseURL,
+		transport.TLSClientConfig{
+			CACertFile:         appConfig.ControlPlaneCACertFile,
+			InsecureSkipVerify: appConfig.ControlPlaneInsecureSkipVerify,
+		},
 		appConfig.BreakerFailures,
 		time.Duration(appConfig.BreakerTimeoutSeconds)*time.Second,
+		appConfig.ControlPlaneBearerToken,
 	)
-	namfClient := namf.NewClient(appConfig.NamfBaseURL)
+	if err != nil {
+		logMain("FATAL", "failed to initialize control-plane TLS client", map[string]any{"error": err.Error()})
+		os.Exit(1)
+	}
+	namfClient, err := namf.NewClientWithTLS(appConfig.NamfBaseURL, transport.TLSClientConfig{
+		CACertFile:         appConfig.NamfCACertFile,
+		InsecureSkipVerify: appConfig.NamfInsecureSkipVerify,
+	}, appConfig.NamfBearerToken)
+	if err != nil {
+		logMain("FATAL", "failed to initialize Namf TLS client", map[string]any{"error": err.Error()})
+		os.Exit(1)
+	}
 	store, err := service.NewFileAuthContextStore(appConfig.AuthContextStoreFile)
 	if err != nil {
 		logMain("FATAL", "failed to initialize auth context store", map[string]any{"error": err.Error()})
@@ -49,7 +66,7 @@ func main() {
 	)
 	authService.SetMetricsRecorder(reg)
 
-	handler := api.NewHandler(authService)
+	handler := api.NewHandlerWithAuthorization(authService, api.AuthorizationConfig{BearerToken: appConfig.SBIBearerToken})
 
 	server := &http.Server{
 		Addr:    appConfig.Address(),
@@ -60,11 +77,19 @@ func main() {
 		"address":       appConfig.Address(),
 		"control_plane": appConfig.ControlPlaneBaseURL,
 		"namf":          appConfig.NamfBaseURL,
+		"tls_enabled":   appConfig.TLSEnabled(),
 	})
-	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+	if err := serve(server, appConfig); err != nil && err != http.ErrServerClosed {
 		logMain("FATAL", "server failed", map[string]any{"error": err.Error()})
 		os.Exit(1)
 	}
+}
+
+func serve(server *http.Server, appConfig config.Config) error {
+	if appConfig.TLSEnabled() {
+		return server.ListenAndServeTLS(appConfig.TLSCertFile, appConfig.TLSKeyFile)
+	}
+	return server.ListenAndServe()
 }
 
 func logMain(level, msg string, fields map[string]any) {

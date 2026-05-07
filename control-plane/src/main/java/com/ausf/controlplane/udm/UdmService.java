@@ -1,15 +1,21 @@
 package com.ausf.controlplane.udm;
 
 import com.ausf.controlplane.authentication.CryptographyService;
+import com.ausf.controlplane.crypto.Milenage;
+import com.ausf.controlplane.crypto.Tuak;
+import com.ausf.controlplane.subscriber.AkaAlgorithm;
 import com.ausf.controlplane.subscriber.SubscriberProfile;
 import com.ausf.controlplane.subscriber.SubscriberRepository;
 import java.util.Optional;
+import java.util.OptionalLong;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
 @Service
 @ConditionalOnProperty(name = "ausf.udm.mode", havingValue = "mock", matchIfMissing = true)
 public class UdmService implements UdmClient {
+    private static final String EAP_AKA_PRIME_CHALLENGE_PREFIX = "EAP-Request/AKA'-Challenge";
+
     private final SubscriberRepository subscriberRepository;
     private final CryptographyService cryptographyService;
 
@@ -29,12 +35,45 @@ public class UdmService implements UdmClient {
         String resolvedServingNetworkName = resolveServingNetworkName(servingNetworkName, subscriberProfile);
         String resolvedAuthType = resolveAuthType(authType, subscriberProfile);
 
-        return Optional.of(new UdmAuthenticationData(
-            subscriberProfile.getSupi(),
-            resolvedAuthType,
-            resolvedServingNetworkName,
-            generateVector(subscriberProfile, resolvedServingNetworkName, resolvedAuthType)
-        ));
+        return Optional.of(issueAuthenticationData(subscriberProfile, resolvedServingNetworkName, resolvedAuthType));
+    }
+
+    @Override
+    public Optional<UdmAuthenticationData> resynchronizeAuthenticationData(
+        String supi,
+        String servingNetworkName,
+        String authType,
+        String rand,
+        String auts
+    ) {
+        Optional<SubscriberProfile> subscriber = subscriberRepository.findBySupi(supi);
+        if (subscriber.isEmpty()) {
+            return Optional.empty();
+        }
+
+        SubscriberProfile subscriberProfile = subscriber.get();
+        String resolvedServingNetworkName = resolveServingNetworkName(servingNetworkName, subscriberProfile);
+        String resolvedAuthType = resolveAuthType(authType, subscriberProfile);
+        if (!"5G_AKA".equals(resolvedAuthType) && !"EAP_AKA_PRIME".equals(resolvedAuthType)) {
+            throw new IllegalArgumentException("AUTS re-synchronization is only supported for 5G_AKA or EAP_AKA_PRIME");
+        }
+        if (resolveAkaAlgorithm(subscriberProfile, resolvedAuthType) != AkaAlgorithm.MILENAGE) {
+            throw new IllegalArgumentException("AUTS re-synchronization is only supported for Milenage-backed 5G_AKA or EAP_AKA_PRIME");
+        }
+
+        OptionalLong recoveredSqn = cryptographyService.validateMilenageAuts(
+            rand,
+            auts,
+            subscriberProfile.getPermanentKey(),
+            subscriberProfile.getOpc()
+        );
+        if (recoveredSqn.isEmpty()) {
+            throw new IllegalArgumentException("AUTS verification failed");
+        }
+
+        long nextSqn = Math.max(subscriberProfile.getSequenceNumber(), recoveredSqn.getAsLong() + 1L);
+        subscriberProfile.setSequenceNumber(nextSqn);
+        return Optional.of(issueAuthenticationData(subscriberProfile, resolvedServingNetworkName, resolvedAuthType));
     }
 
     private AuthenticationVector generateVector(
@@ -42,25 +81,62 @@ public class UdmService implements UdmClient {
         String servingNetworkName,
         String authType
     ) {
-        String rand = cryptographyService.digestHex(
-            subscriberProfile.getPermanentKey() + subscriberProfile.getOpc() + subscriberProfile.getSequenceNumber()
-        ).substring(0, 32);
-        String autn = cryptographyService.digestHex(
-            subscriberProfile.getOpc() + servingNetworkName + subscriberProfile.getRoutingIndicator()
-        ).substring(0, 32);
-        String xresStar = cryptographyService.digestHex(rand + autn + subscriberProfile.getPermanentKey()).substring(0, 32);
-        String hxresStar = cryptographyService.digestHex(rand + xresStar).substring(0, 32);
-        String kausf = cryptographyService.digestHex(subscriberProfile.getPermanentKey() + servingNetworkName);
-        String eapChallenge = "EAP-Request/AKA'-Challenge " + cryptographyService.digestHex(autn + xresStar).substring(0, 24);
+        String rand = cryptographyService.generateRandomHex(32);
+        long sequenceNumber = subscriberProfile.getSequenceNumber();
+        AkaAlgorithm akaAlgorithm = resolveAkaAlgorithm(subscriberProfile, authType);
 
-        return new AuthenticationVector(
-            authType,
+        if (akaAlgorithm == AkaAlgorithm.TUAK) {
+            Tuak.TuakVector v = cryptographyService.generateTuakVector(
+                rand,
+                subscriberProfile.getPermanentKey(),
+                subscriberProfile.getOpc(),
+                sequenceNumber,
+                servingNetworkName
+            );
+            String eapChallenge = "EAP_AKA_PRIME".equals(authType)
+                ? formatEapChallenge(v.rand(), v.autn(), v.hxresStar())
+                : null;
+            return new AuthenticationVector(
+                authType, v.rand(), v.autn(), null, v.xresStar(), v.hxresStar(), v.kausf(), eapChallenge
+            );
+        }
+
+        Milenage.MilenageVector v = cryptographyService.generateMilenageVector(
             rand,
-            autn,
-            xresStar,
-            hxresStar,
-            kausf,
-            eapChallenge
+            subscriberProfile.getPermanentKey(),
+            subscriberProfile.getOpc(),
+            sequenceNumber,
+            servingNetworkName
+        );
+        String auts = "5G_AKA".equals(authType)
+            ? cryptographyService.generateMilenageAuts(
+                rand,
+                subscriberProfile.getPermanentKey(),
+                subscriberProfile.getOpc(),
+                sequenceNumber
+            )
+            : null;
+        String eapChallenge = "EAP_AKA_PRIME".equals(authType)
+            ? formatEapChallenge(v.rand(), v.autn(), v.hxresStar())
+            : null;
+        return new AuthenticationVector(
+            authType, v.rand(), v.autn(), auts, v.xresStar(), v.hxresStar(), v.kausf(), eapChallenge
+        );
+    }
+
+    private UdmAuthenticationData issueAuthenticationData(
+        SubscriberProfile subscriberProfile,
+        String servingNetworkName,
+        String authType
+    ) {
+        AuthenticationVector vector = generateVector(subscriberProfile, servingNetworkName, authType);
+        subscriberProfile.setSequenceNumber(subscriberProfile.getSequenceNumber() + 1L);
+        subscriberRepository.save(subscriberProfile);
+        return new UdmAuthenticationData(
+            subscriberProfile.getSupi(),
+            authType,
+            servingNetworkName,
+            vector
         );
     }
 
@@ -74,5 +150,21 @@ public class UdmService implements UdmClient {
         return requestedAuthType == null || requestedAuthType.isBlank()
             ? subscriberProfile.getAuthMethod()
             : requestedAuthType;
+    }
+
+    private AkaAlgorithm resolveAkaAlgorithm(SubscriberProfile subscriberProfile, String authType) {
+        return subscriberProfile.getAkaAlgorithm() != null
+            ? subscriberProfile.getAkaAlgorithm()
+            : AkaAlgorithm.defaultForAuthMethod(authType);
+    }
+
+    private String formatEapChallenge(String rand, String autn, String hxresStar) {
+        return String.format(
+            "%s RAND=%s AUTN=%s HXRES*=%s",
+            EAP_AKA_PRIME_CHALLENGE_PREFIX,
+            rand,
+            autn,
+            hxresStar
+        );
     }
 }

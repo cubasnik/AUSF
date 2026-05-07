@@ -10,6 +10,7 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withServerError;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
+import com.ausf.controlplane.config.TlsAwareRestClientBuilderCustomizer;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
@@ -21,7 +22,7 @@ class NnrfClientTest {
     void shouldResolveUdmBaseUrlFromDiscoveryResponse() {
         RestClient.Builder builder = RestClient.builder();
         MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
-        NnrfClient client = new NnrfClient(builder, "http://mock-nrf:8091/");
+      NnrfClient client = new NnrfClient(builder, TlsAwareRestClientBuilderCustomizer.noop(), "http://mock-nrf:8091/");
 
         server.expect(requestTo("http://mock-nrf:8091/nnrf-disc/v1/nf-instances?target-nf-type=UDM&requester-nf-type=AUSF"))
           .andExpect(method(requireNonNull(GET)))
@@ -48,7 +49,7 @@ class NnrfClientTest {
 
     @Test
     void shouldReturnEmptyWhenNnrfBaseUrlIsNotConfigured() {
-        NnrfClient client = new NnrfClient(RestClient.builder(), "");
+      NnrfClient client = new NnrfClient(RestClient.builder(), TlsAwareRestClientBuilderCustomizer.noop(), "");
 
         assertFalse(client.resolveUdmBaseUrl().isPresent());
     }
@@ -57,7 +58,7 @@ class NnrfClientTest {
     void shouldWrapDiscoveryFailures() {
         RestClient.Builder builder = RestClient.builder();
       MockRestServiceServer server = MockRestServiceServer.bindTo(builder).ignoreExpectOrder(true).build();
-        NnrfClient client = new NnrfClient(builder, "http://mock-nrf:8091");
+        NnrfClient client = new NnrfClient(builder, TlsAwareRestClientBuilderCustomizer.noop(), "http://mock-nrf:8091");
 
         server.expect(requestTo("http://mock-nrf:8091/nnrf-disc/v1/nf-instances?target-nf-type=UDM&requester-nf-type=AUSF"))
             .andExpect(method(requireNonNull(GET)))
@@ -77,7 +78,7 @@ class NnrfClientTest {
     void shouldRetryTransientDiscoveryFailure() {
         RestClient.Builder builder = RestClient.builder();
         MockRestServiceServer server = MockRestServiceServer.bindTo(builder).ignoreExpectOrder(true).build();
-        NnrfClient client = new NnrfClient(builder, "http://mock-nrf:8091");
+      NnrfClient client = new NnrfClient(builder, TlsAwareRestClientBuilderCustomizer.noop(), "http://mock-nrf:8091");
 
         server.expect(requestTo("http://mock-nrf:8091/nnrf-disc/v1/nf-instances?target-nf-type=UDM&requester-nf-type=AUSF"))
           .andExpect(method(requireNonNull(GET)))

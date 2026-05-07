@@ -1,4 +1,4 @@
-.PHONY: help networking-build networking-run control-plane-test control-plane-run microservices-build microservices-run automation-test smoke-test smoke-ttl-only http-udm-smoke-suite validate-fast-pwsh validate-fast validate-all regression-suite compose-up compose-down compose-logs compose-refresh-mocks
+.PHONY: help networking-build networking-run control-plane-test control-plane-run microservices-build microservices-run automation-test smoke-test smoke-ttl-only http-udm-smoke-suite https-tls-smoke-suite validate-fast-pwsh validate-fast validate-all regression-suite compose-up compose-down compose-logs compose-refresh-mocks
 
 help:
 	@echo "AUSF polyglot workspace"
@@ -13,6 +13,7 @@ help:
 	@echo "  make smoke-test         Run Python end-to-end smoke client"
 	@echo "  make smoke-ttl-only    Run only TTL-expiration smoke scenario"
 	@echo "  make http-udm-smoke-suite Run the full HTTP UDM happy/negative smoke suite"
+	@echo "  make https-tls-smoke-suite Run the full HTTPS TLS happy/negative smoke suite"
 	@echo "  make validate-fast-pwsh Run the PowerShell fast-validation wrapper"
 	@echo "  make validate-fast     Run fast validation; on Windows this delegates to the PowerShell wrapper"
 	@echo "  make validate-all      Backward-compatible alias for validate-fast"
@@ -53,6 +54,9 @@ smoke-ttl-only:
 
 http-udm-smoke-suite:
 	python automation/scripts/run_http_udm_smoke_suite.py
+
+https-tls-smoke-suite:
+	python automation/scripts/run_https_tls_smoke_suite.py
 
 validate-fast-pwsh:
 	pwsh -File automation/scripts/run_fast_validation.ps1

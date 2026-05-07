@@ -10,7 +10,8 @@ import (
 )
 
 type Handler struct {
-	authService *service.AuthService
+	authService   *service.AuthService
+	authorization AuthorizationConfig
 }
 
 type createAuthRequest struct {
@@ -22,11 +23,16 @@ type createAuthRequest struct {
 
 type confirmRequest struct {
 	ResStar    string `json:"resStar"`
+	Auts       string `json:"auts"`
 	EapPayload string `json:"eapPayload"`
 }
 
 func NewHandler(authService *service.AuthService) Handler {
-	return Handler{authService: authService}
+	return NewHandlerWithAuthorization(authService, AuthorizationConfig{})
+}
+
+func NewHandlerWithAuthorization(authService *service.AuthService, authorization AuthorizationConfig) Handler {
+	return Handler{authService: authService, authorization: authorization}
 }
 
 func (handler Handler) Routes() http.Handler {
@@ -35,7 +41,7 @@ func (handler Handler) Routes() http.Handler {
 	mux.HandleFunc("/metrics", handler.metrics)
 	mux.HandleFunc("/nausf-auth/v1/ue-authentications", handler.createUEAuthentication)
 	mux.HandleFunc("/nausf-auth/v1/ue-authentications/", handler.authContextRoutes)
-	return withObservability(mux)
+	return withObservability(withAuthorization(mux, handler.authorization))
 }
 
 func (handler Handler) health(writer http.ResponseWriter, _ *http.Request) {
@@ -125,26 +131,28 @@ func (handler Handler) confirm(writer http.ResponseWriter, request *http.Request
 		return
 	}
 	if expectsEapPayload {
-		if strings.TrimSpace(payload.EapPayload) == "" || strings.TrimSpace(payload.ResStar) != "" {
+		if strings.TrimSpace(payload.EapPayload) == "" || strings.TrimSpace(payload.ResStar) != "" || strings.TrimSpace(payload.Auts) != "" {
 			writeProblem(writer, http.StatusBadRequest, "Invalid request", "eapPayload is required for eap-session and resStar must be omitted", "INVALID_CONFIRMATION_PAYLOAD", request.URL.Path)
 			return
 		}
 	} else {
-		if strings.TrimSpace(payload.ResStar) == "" || strings.TrimSpace(payload.EapPayload) != "" {
-			writeProblem(writer, http.StatusBadRequest, "Invalid request", "resStar is required for 5g-aka-confirmation and eapPayload must be omitted", "INVALID_CONFIRMATION_PAYLOAD", request.URL.Path)
+		if strings.TrimSpace(payload.ResStar) == "" && strings.TrimSpace(payload.Auts) == "" && strings.TrimSpace(payload.EapPayload) == "" {
+			writeProblem(writer, http.StatusBadRequest, "Invalid request", "resStar or auts is required", "MANDATORY_IE_MISSING", request.URL.Path)
+			return
+		}
+
+		hasResStar := strings.TrimSpace(payload.ResStar) != ""
+		hasAuts := strings.TrimSpace(payload.Auts) != ""
+		if hasResStar == hasAuts || strings.TrimSpace(payload.EapPayload) != "" {
+			writeProblem(writer, http.StatusBadRequest, "Invalid request", "exactly one of resStar or auts is required for 5g-aka-confirmation and eapPayload must be omitted", "INVALID_CONFIRMATION_PAYLOAD", request.URL.Path)
 			return
 		}
 	}
 
-	if payload.ResStar == "" && payload.EapPayload == "" {
-		writeProblem(writer, http.StatusBadRequest, "Invalid request", "resStar or eapPayload is required", "MANDATORY_IE_MISSING", request.URL.Path)
-		return
-	}
-
-	result, err := handler.authService.Confirm(request.Context(), authCtxID, payload.ResStar, payload.EapPayload)
+	result, err := handler.authService.Confirm(request.Context(), authCtxID, payload.ResStar, payload.Auts, payload.EapPayload)
 	if err != nil {
 		apiErr := err.(service.APIError)
-		writeProblem(writer, apiErr.StatusCode, "Authentication rejected", apiErr.Message, apiErr.Cause, request.URL.Path)
+		writeProblemWithEapPayload(writer, apiErr.StatusCode, "Authentication rejected", apiErr.Message, apiErr.Cause, request.URL.Path, apiErr.EapPayload)
 		return
 	}
 

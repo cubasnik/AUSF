@@ -33,7 +33,10 @@ def main() -> int:
     except AUSFError as error:
         assert error.status_code == 502
         assert error.payload["cause"] == "CONTROL_PLANE_UNAVAILABLE"
-        assert "UDM request failed:" in error.payload["detail"]
+        assert (
+            "UDM request failed:" in error.payload["detail"]
+            or "UDM circuit breaker is open:" in error.payload["detail"]
+        )
         print(f"upstream-unavailable-error: {error.payload}")
     else:
         raise AssertionError("expected 502 CONTROL_PLANE_UNAVAILABLE when mock UDM returns 503")

@@ -75,10 +75,13 @@ __pycache__/
 *.pyd
 .venv/
 .pytest_cache/
+automation/.tls-dev/
 
 # Java / Maven
 target/
 *.class
+*.mv.db
+*.trace.db
 
 # Go
 *.test

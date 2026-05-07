@@ -1,6 +1,10 @@
 package com.ausf.controlplane.udm;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.ausf.controlplane.config.TlsAwareRestClientBuilderCustomizer;
 import java.time.Duration;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Supplier;
@@ -20,6 +24,7 @@ public class HttpUdmClient implements UdmClient {
     private static final long BACKOFF_MILLIS = 200L;
     static final int DEFAULT_BREAKER_FAILURES = 5;
     static final int DEFAULT_BREAKER_OPEN_SECONDS = 10;
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     private final RestClient.Builder restClientBuilder;
     private final NnrfClient nnrfClient;
@@ -28,12 +33,13 @@ public class HttpUdmClient implements UdmClient {
 
     public HttpUdmClient(
         RestClient.Builder restClientBuilder,
+        TlsAwareRestClientBuilderCustomizer tlsCustomizer,
         NnrfClient nnrfClient,
         @Value("${ausf.udm.base-url:}") String baseUrl,
         @Value("${ausf.udm.breaker.failure-threshold:" + DEFAULT_BREAKER_FAILURES + "}") int breakerFailures,
         @Value("${ausf.udm.breaker.open-duration-seconds:" + DEFAULT_BREAKER_OPEN_SECONDS + "}") int breakerOpenSeconds
     ) {
-        this.restClientBuilder = restClientBuilder;
+	    this.restClientBuilder = tlsCustomizer.customize(restClientBuilder);
         this.nnrfClient = nnrfClient;
         this.configuredBaseUrl = sanitizeBaseUrl(baseUrl);
         this.circuitBreaker = new UdmCircuitBreaker(breakerFailures, Duration.ofSeconds(breakerOpenSeconds));
@@ -42,33 +48,12 @@ public class HttpUdmClient implements UdmClient {
     @Override
     public Optional<UdmAuthenticationData> getAuthenticationData(String supi, String servingNetworkName, String authType) {
         try {
-            UdmGenerateAuthDataResponse response = executeWithRetry(() -> restClientBuilder.baseUrl(Objects.requireNonNull(resolveBaseUrl())).build().post()
-                .uri("/nudm-ueau/v1/{supi}/security-information/generate-auth-data", supi)
-                .contentType(Objects.requireNonNull(MediaType.APPLICATION_JSON))
-                .body(new UdmGenerateAuthDataRequest(servingNetworkName, authType))
-                .retrieve()
-                .body(UdmGenerateAuthDataResponse.class));
-
-            if (response == null) {
-                throw new IllegalStateException("UDM returned an empty authentication data response");
-            }
-
-            AuthenticationVector authenticationVector = new AuthenticationVector(
-                coalesce(response.getAuthType(), authType),
-                response.getRand(),
-                response.getAutn(),
-                response.getXresStar(),
-                response.getHxresStar(),
-                response.getKausf(),
-                response.getEapChallenge()
+            return requestAuthenticationData(
+                supi,
+                servingNetworkName,
+                authType,
+                new UdmGenerateAuthDataRequest(servingNetworkName, authType)
             );
-
-            return Optional.of(new UdmAuthenticationData(
-                coalesce(response.getSupi(), supi),
-                coalesce(response.getAuthType(), authType),
-                coalesce(response.getServingNetworkName(), servingNetworkName),
-                authenticationVector
-            ));
         } catch (HttpClientErrorException.NotFound exception) {
             return Optional.empty();
         } catch (RestClientException exception) {
@@ -76,6 +61,73 @@ public class HttpUdmClient implements UdmClient {
         } catch (UdmUnavailableException exception) {
             throw new IllegalStateException("UDM circuit breaker is open: " + exception.getMessage(), exception);
         }
+    }
+
+    @Override
+    public Optional<UdmAuthenticationData> resynchronizeAuthenticationData(
+        String supi,
+        String servingNetworkName,
+        String authType,
+        String rand,
+        String auts
+    ) {
+        try {
+            return requestAuthenticationData(
+                supi,
+                servingNetworkName,
+                authType,
+                Map.of(
+                    "servingNetworkName", servingNetworkName,
+                    "authType", authType,
+                    "rand", rand,
+                    "auts", auts
+                )
+            );
+        } catch (HttpClientErrorException.BadRequest exception) {
+            throw new IllegalArgumentException(extractErrorDetail(exception));
+        } catch (HttpClientErrorException.NotFound exception) {
+            return Optional.empty();
+        } catch (RestClientException exception) {
+            throw new IllegalStateException("UDM request failed: " + exception.getMessage(), exception);
+        } catch (UdmUnavailableException exception) {
+            throw new IllegalStateException("UDM circuit breaker is open: " + exception.getMessage(), exception);
+        }
+    }
+
+    private Optional<UdmAuthenticationData> requestAuthenticationData(
+        String supi,
+        String servingNetworkName,
+        String authType,
+        Object requestPayload
+    ) {
+        UdmGenerateAuthDataResponse response = executeWithRetry(() -> restClientBuilder.baseUrl(Objects.requireNonNull(resolveBaseUrl())).build().post()
+            .uri("/nudm-ueau/v1/{supi}/security-information/generate-auth-data", supi)
+            .contentType(Objects.requireNonNull(MediaType.APPLICATION_JSON))
+            .body(requestPayload)
+            .retrieve()
+            .body(UdmGenerateAuthDataResponse.class));
+
+        if (response == null) {
+            throw new IllegalStateException("UDM returned an empty authentication data response");
+        }
+
+        AuthenticationVector authenticationVector = new AuthenticationVector(
+            coalesce(response.getAuthType(), authType),
+            response.getRand(),
+            response.getAutn(),
+            response.getAuts(),
+            response.getXresStar(),
+            response.getHxresStar(),
+            response.getKausf(),
+            response.getEapChallenge()
+        );
+
+        return Optional.of(new UdmAuthenticationData(
+            coalesce(response.getSupi(), supi),
+            coalesce(response.getAuthType(), authType),
+            coalesce(response.getServingNetworkName(), servingNetworkName),
+            authenticationVector
+        ));
     }
 
     private String coalesce(String primary, String fallback) {
@@ -151,13 +203,39 @@ public class HttpUdmClient implements UdmClient {
         }
     }
 
+    private String extractErrorDetail(HttpClientErrorException exception) {
+        String responseBody = exception.getResponseBodyAsString();
+        if (responseBody == null || responseBody.isBlank()) {
+            return exception.getMessage();
+        }
+        try {
+            Map<String, Object> payload = OBJECT_MAPPER.readValue(responseBody, new TypeReference<>() { });
+            Object detail = payload.get("detail");
+            if (detail instanceof String detailString && !detailString.isBlank()) {
+                return detailString;
+            }
+        } catch (Exception ignored) {
+            // Fall through to the raw exception message when the response body is not JSON.
+        }
+        return exception.getMessage();
+    }
+
     static class UdmGenerateAuthDataRequest {
         private String servingNetworkName;
         private String authType;
+        private String rand;
+        private String auts;
 
         UdmGenerateAuthDataRequest(String servingNetworkName, String authType) {
             this.servingNetworkName = servingNetworkName;
             this.authType = authType;
+        }
+
+        UdmGenerateAuthDataRequest(String servingNetworkName, String authType, String rand, String auts) {
+            this.servingNetworkName = servingNetworkName;
+            this.authType = authType;
+            this.rand = rand;
+            this.auts = auts;
         }
 
         public String getServingNetworkName() {
@@ -175,6 +253,22 @@ public class HttpUdmClient implements UdmClient {
         public void setAuthType(String authType) {
             this.authType = authType;
         }
+
+        public String getRand() {
+            return rand;
+        }
+
+        public void setRand(String rand) {
+            this.rand = rand;
+        }
+
+        public String getAuts() {
+            return auts;
+        }
+
+        public void setAuts(String auts) {
+            this.auts = auts;
+        }
     }
 
     static class UdmGenerateAuthDataResponse {
@@ -183,6 +277,7 @@ public class HttpUdmClient implements UdmClient {
         private String servingNetworkName;
         private String rand;
         private String autn;
+        private String auts;
         private String xresStar;
         private String hxresStar;
         private String kausf;
@@ -226,6 +321,14 @@ public class HttpUdmClient implements UdmClient {
 
         public void setAutn(String autn) {
             this.autn = autn;
+        }
+
+        public String getAuts() {
+            return auts;
+        }
+
+        public void setAuts(String auts) {
+            this.auts = auts;
         }
 
         public String getXresStar() {

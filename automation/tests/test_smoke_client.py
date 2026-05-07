@@ -17,6 +17,7 @@ from smoke_client import AUSFClient, AUSFError
 class _Handler(BaseHTTPRequestHandler):
     last_create_payload: dict | None = None
     last_confirm_path: str | None = None
+    last_confirm_payload: dict | None = None
 
     def do_GET(self) -> None:
         if self.path == "/healthz":
@@ -85,7 +86,15 @@ class _Handler(BaseHTTPRequestHandler):
             self.send_response(201)
         else:
             _Handler.last_confirm_path = self.path
-            response = {"authCtxId": "auth-1", "authResult": "SUCCESS", "kseaf": payload.get("resStar") or payload.get("eapPayload")}
+            _Handler.last_confirm_payload = payload
+            if payload.get("auts"):
+                response = {
+                    "authCtxId": "auth-1",
+                    "authResult": "SYNC_FAILURE",
+                    "5gAuthData": {"rand": "d" * 32, "autn": "e" * 32, "hxresStar": "f" * 32},
+                }
+            else:
+                response = {"authCtxId": "auth-1", "authResult": "SUCCESS", "kseaf": payload.get("resStar") or payload.get("eapPayload")}
             self.send_response(200)
         self.send_header("Content-Type", "application/json")
         self.end_headers()
@@ -123,6 +132,11 @@ class AUSFClientTest(unittest.TestCase):
         self.assertEqual("CHALLENGE_SENT", context["status"])
         self.assertEqual("SUCCESS", confirmed["authResult"])
 
+    def test_client_stores_optional_ca_cert_file(self) -> None:
+        client = AUSFClient(self.base_url, ca_cert_file="dev-ca.pem")
+
+        self.assertEqual("dev-ca.pem", client.ca_cert_file)
+
     def test_eap_aka_prime_flow(self) -> None:
         client = AUSFClient(self.base_url)
 
@@ -137,6 +151,16 @@ class AUSFClientTest(unittest.TestCase):
         self.assertEqual("EAP-AKA'", challenge["eapSession"]["method"])
         self.assertEqual("/nausf-auth/v1/ue-authentications/auth-eap/eap-session", _Handler.last_confirm_path)
         self.assertEqual("SUCCESS", confirmed["authResult"])
+
+    def test_sync_failure_flow(self) -> None:
+        client = AUSFClient(self.base_url)
+
+        confirmed = client.confirm_authentication_with_auts("auth-1", "auts-token")
+
+        self.assertEqual("/nausf-auth/v1/ue-authentications/auth-1/5g-aka-confirmation", _Handler.last_confirm_path)
+        self.assertEqual("auts-token", _Handler.last_confirm_payload["auts"])
+        self.assertEqual("SYNC_FAILURE", confirmed["authResult"])
+        self.assertEqual("d" * 32, confirmed["5gAuthData"]["rand"])
 
     def test_problem_details_are_raised(self) -> None:
         client = AUSFClient(self.base_url)

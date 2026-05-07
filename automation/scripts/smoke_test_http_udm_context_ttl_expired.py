@@ -10,8 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from compose_runtime import restart_compose_service, wait_for_container_health
-from smoke_client import AUSFClient, AUSFError
-from smoke_runtime import AUSF_BASE_URL, MOCK_AMF_BASE_URL, MOCK_NRF_BASE_URL, MOCK_UDM_BASE_URL, load_amf_notifications, wait_for_health
+from staged_compose_smoke import read_prepared_state, run_compose_network_script, wait_for_compose_services
 
 
 STORE_PATH = "/tmp/ausf-auth-contexts.json"
@@ -40,53 +39,33 @@ def write_auth_context_store(payload: dict) -> None:
 
 
 def main() -> int:
-    supi = "imsi-250010000000001"
-    serving_network_name = "5G:mnc001.mcc001.3gppnetwork.org"
+    wait_for_compose_services(["mock-nrf", "mock-udm", "mock-amf", "ausf-go"])
 
-    print(f"nrf-health: {wait_for_health(f'{MOCK_NRF_BASE_URL}/healthz')}")
-    print(f"udm-health: {wait_for_health(f'{MOCK_UDM_BASE_URL}/healthz')}")
-    print(f"amf-health: {wait_for_health(f'{MOCK_AMF_BASE_URL}/healthz')}")
-
-    client = AUSFClient(AUSF_BASE_URL)
-    print(f"ausf-health: {client.health()}")
-    baseline_notification_count = len(load_amf_notifications())
-
-    challenge = client.initiate_authentication(
-        supi,
-        serving_network_name,
-        notification_uri="http://mock-amf:8092/namf-comm/v1/ue-authentications/{authCtxId}/status-notify",
+    prepared_output = run_compose_network_script(
+        "automation/scripts/smoke_test_http_udm_context_ttl_expired_prepare.py",
     )
+    prepared_state = read_prepared_state(prepared_output)
 
     store = read_auth_context_store()
     contexts = store.get("contexts", {})
-    context = contexts.get(challenge["authCtxId"])
+    context = contexts.get(prepared_state["authCtxId"])
     if context is None:
-        raise AssertionError(f"auth context {challenge['authCtxId']} not found in persisted store")
+        raise AssertionError(f"auth context {prepared_state['authCtxId']} not found in persisted store")
 
-    # Force expiration without waiting for TTL by backdating the persisted timestamp.
     context["createdAt"] = "2000-01-01T00:00:00Z"
     write_auth_context_store(store)
 
     restart_compose_service("ausf-go")
     wait_for_container_health("ausf-go")
 
-    try:
-        client.get_authentication_context(challenge["authCtxId"])
-    except AUSFError as error:
-        assert error.status_code == 404
-        assert error.payload["cause"] == "CONTEXT_NOT_FOUND"
-        assert error.payload["detail"] == "authentication context not found"
-        print(f"ttl-expired-context-error: {error.payload}")
-    else:
-        raise AssertionError("expected 404 CONTEXT_NOT_FOUND for expired authentication context")
+    run_compose_network_script(
+        "automation/scripts/smoke_test_http_udm_context_ttl_expired_verify.py",
+        prepared_state["authCtxId"],
+    )
 
     store_after = read_auth_context_store()
-    assert challenge["authCtxId"] not in store_after.get("contexts", {})
+    assert prepared_state["authCtxId"] not in store_after.get("contexts", {})
     print("expired-context-cleanup: removed from persisted auth context store")
-
-    notifications = load_amf_notifications()[baseline_notification_count:]
-    assert not notifications
-    print("amf-notifications: []")
     return 0
 
 

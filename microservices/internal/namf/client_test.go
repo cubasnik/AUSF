@@ -2,10 +2,14 @@ package namf
 
 import (
 	"encoding/json"
+	"encoding/pem"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"sync/atomic"
 	"testing"
+
+	"github.com/alexey/ausf/microservices/internal/transport"
 )
 
 func TestClientShouldRetryTransientFailure(t *testing.T) {
@@ -80,6 +84,55 @@ func TestClientShouldUseNotificationUriTemplateWhenProvided(t *testing.T) {
 		SUPI:       "imsi-250010000000007",
 		AuthResult: "SUCCESS",
 	}, server.URL+"/custom/{authCtxId}/callback")
+	if err != nil {
+		t.Fatalf("NotifyUEAuthenticationStatus() error = %v", err)
+	}
+}
+
+func TestClientShouldSendBearerTokenWhenConfigured(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if got := request.Header.Get("Authorization"); got != "Bearer namf-token" {
+			t.Fatalf("Authorization = %s, want Bearer namf-token", got)
+		}
+		writer.WriteHeader(http.StatusNoContent)
+	}))
+	defer server.Close()
+
+	client, err := NewClientWithTLS(server.URL, transport.TLSClientConfig{}, "namf-token")
+	if err != nil {
+		t.Fatalf("NewClientWithTLS() error = %v", err)
+	}
+
+	err = client.NotifyUEAuthenticationStatus(UEAuthenticationStatusNotification{AuthCtxID: "auth-1", SUPI: "imsi-250010000000001", AuthResult: "SUCCESS"}, "")
+	if err != nil {
+		t.Fatalf("NotifyUEAuthenticationStatus() error = %v", err)
+	}
+}
+
+func TestClientShouldTrustConfiguredTLSCACertificate(t *testing.T) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		writer.WriteHeader(http.StatusNoContent)
+	}))
+	defer server.Close()
+
+	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: server.Certificate().Raw})
+	caFile, err := os.CreateTemp(t.TempDir(), "namf-ca-*.pem")
+	if err != nil {
+		t.Fatalf("CreateTemp() error = %v", err)
+	}
+	if _, err := caFile.Write(certPEM); err != nil {
+		t.Fatalf("Write() error = %v", err)
+	}
+	if err := caFile.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+
+	client, err := NewClientWithTLS(server.URL, transport.TLSClientConfig{CACertFile: caFile.Name()}, "")
+	if err != nil {
+		t.Fatalf("NewClientWithTLS() error = %v", err)
+	}
+
+	err = client.NotifyUEAuthenticationStatus(UEAuthenticationStatusNotification{AuthCtxID: "auth-1", SUPI: "imsi-250010000000001", AuthResult: "SUCCESS"}, "")
 	if err != nil {
 		t.Fatalf("NotifyUEAuthenticationStatus() error = %v", err)
 	}

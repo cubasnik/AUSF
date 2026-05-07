@@ -1,5 +1,6 @@
 package com.ausf.controlplane.udm;
 
+import com.ausf.controlplane.config.TlsAwareRestClientBuilderCustomizer;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -19,8 +20,12 @@ public class NnrfClient {
     private final RestClient.Builder restClientBuilder;
     private final String baseUrl;
 
-    public NnrfClient(RestClient.Builder restClientBuilder, @Value("${ausf.nnrf.base-url:}") String baseUrl) {
-        this.restClientBuilder = restClientBuilder;
+    public NnrfClient(
+        RestClient.Builder restClientBuilder,
+        TlsAwareRestClientBuilderCustomizer tlsCustomizer,
+        @Value("${ausf.nnrf.base-url:}") String baseUrl
+    ) {
+	    this.restClientBuilder = tlsCustomizer.customize(restClientBuilder);
         this.baseUrl = sanitizeBaseUrl(baseUrl);
     }
 

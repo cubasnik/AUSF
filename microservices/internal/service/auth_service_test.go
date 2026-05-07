@@ -80,7 +80,7 @@ func TestConfirmShouldNotifyNamfOnSuccessfulAuthentication(t *testing.T) {
 		Status:             "CHALLENGE_SENT",
 	})
 
-	result, err := authService.Confirm(context.Background(), "auth-1", "res-star", "")
+	result, err := authService.Confirm(context.Background(), "auth-1", "res-star", "", "")
 	if err != nil {
 		t.Fatalf("Confirm() error = %v", err)
 	}
@@ -197,7 +197,7 @@ func TestLookupDeleteAndConfirmShouldShareContextNotFoundError(t *testing.T) {
 	deleteErr := authService.Delete("missing")
 	assertAPIError(t, deleteErr, http.StatusNotFound, contextNotFoundCause, "authentication context not found")
 
-	_, confirmErr := authService.Confirm(context.Background(), "missing", "deadbeef", "")
+	_, confirmErr := authService.Confirm(context.Background(), "missing", "deadbeef", "", "")
 	assertAPIError(t, confirmErr, http.StatusNotFound, contextNotFoundCause, "authentication context not found")
 }
 
@@ -236,8 +236,574 @@ func TestConfirmShouldMapControlPlaneAuthenticationRejectedError(t *testing.T) {
 		SUPI:      "imsi-250010000000001",
 	})
 
-	_, err := authService.Confirm(context.Background(), "auth-1", "deadbeef", "")
+	_, err := authService.Confirm(context.Background(), "auth-1", "deadbeef", "", "")
 	assertAPIError(t, err, http.StatusUnauthorized, "AUTHENTICATION_REJECTED", "RES* verification failed")
+	storedContext, lookupErr := authService.Lookup("auth-1")
+	if lookupErr != nil {
+		t.Fatalf("Lookup() error = %v", lookupErr)
+	}
+	if storedContext.Status != "FAILED" {
+		t.Fatalf("stored status = %s, want FAILED", storedContext.Status)
+	}
+}
+
+func TestConfirmShouldPersistEapFailurePayloadOnRejectedEapConfirmation(t *testing.T) {
+	authService := NewAuthService(stubControlPlaneClient{
+		confirmErr: controlplane.APIError{
+			StatusCode: http.StatusUnauthorized,
+			Message:    "EAP-AKA' verification failed",
+			ErrorCode:  authenticationRejectedCause,
+		},
+	}, nil)
+	mustSaveContext(t, authService, AuthContext{
+		AuthCtxID:          "auth-eap-1",
+		SUPI:               "imsi-250010000000002",
+		AuthType:           authTypeEapAkaPrime,
+		ServingNetworkName: "5G:mnc001.mcc001.3gppnetwork.org",
+		Status:             authStatusChallengeSent,
+		EapSession: &EapSession{
+			Method:    "EAP-AKA'",
+			Payload:   "EAP-Request/AKA'-Challenge token",
+			SessionID: "auth-eap-1",
+		},
+	})
+
+	_, err := authService.Confirm(context.Background(), "auth-eap-1", "", "", "EAP-Response/AKA'-Challenge bad")
+	assertAPIError(t, err, http.StatusUnauthorized, authenticationRejectedCause, "EAP-AKA' verification failed")
+	storedContext, lookupErr := authService.Lookup("auth-eap-1")
+	if lookupErr != nil {
+		t.Fatalf("Lookup() error = %v", lookupErr)
+	}
+	if storedContext.Status != "FAILED" {
+		t.Fatalf("stored status = %s, want FAILED", storedContext.Status)
+	}
+	if storedContext.EapSession == nil || storedContext.EapSession.Payload != eapFailurePayload {
+		t.Fatalf("stored eap session = %#v, want EAP-Failure payload", storedContext.EapSession)
+	}
+}
+
+type staleEapAfterRefreshControlPlaneClient struct{}
+
+func (staleEapAfterRefreshControlPlaneClient) Initiate(_ context.Context, request controlplane.AuthenticationRequest) (controlplane.AuthenticationResponse, error) {
+	return controlplane.AuthenticationResponse{
+		Success:            true,
+		SUPI:               request.SUPI,
+		AuthType:           request.AuthType,
+		ServingNetworkName: request.ServingNetworkName,
+		EapChallenge:       "EAP-Request/AKA'-Challenge initial-token",
+	}, nil
+}
+
+func (staleEapAfterRefreshControlPlaneClient) Confirm(_ context.Context, _ string, request controlplane.AuthenticationRequest) (controlplane.AuthenticationResponse, error) {
+	switch request.EapPayload {
+	case "EAP-Response/AKA'-Reauthentication token":
+		return controlplane.AuthenticationResponse{
+			Success:      true,
+			RAND:         "rand-2",
+			AUTN:         "autn-2",
+			HXRESStar:    "hxres-2",
+			EapChallenge: "EAP-Request/AKA'-Challenge refreshed-token",
+			Message:      "EAP-AKA' re-authentication challenge generated",
+		}, nil
+	case "EAP-Response/AKA'-Challenge RES*=stale-token":
+		return controlplane.AuthenticationResponse{}, controlplane.APIError{
+			StatusCode: http.StatusUnauthorized,
+			Message:    "EAP-AKA' verification failed",
+			ErrorCode:  authenticationRejectedCause,
+			EapPayload: eapFailurePayload,
+		}
+	default:
+		return controlplane.AuthenticationResponse{}, errors.New("unexpected eap payload")
+	}
+}
+
+func (staleEapAfterRefreshControlPlaneClient) Context(_ context.Context, _ string) (controlplane.AuthenticationResponse, error) {
+	return controlplane.AuthenticationResponse{}, nil
+}
+
+func TestConfirmShouldRejectStaleEapResponseAfterReauthenticationRefresh(t *testing.T) {
+	authService := NewAuthService(staleEapAfterRefreshControlPlaneClient{}, nil)
+
+	_, err := authService.CreateUEAuthentication(
+		context.Background(),
+		"imsi-250010000000002",
+		"5G:mnc001.mcc001.3gppnetwork.org",
+		authTypeEapAkaPrime,
+		"",
+	)
+	if err != nil {
+		t.Fatalf("CreateUEAuthentication() error = %v", err)
+	}
+
+	refreshed, err := authService.Confirm(
+		context.Background(),
+		"auth-1",
+		"",
+		"",
+		"EAP-Response/AKA'-Reauthentication token",
+	)
+	if err != nil {
+		t.Fatalf("Confirm() refresh error = %v", err)
+	}
+	if refreshed.AuthResult != authResultOngoing {
+		t.Fatalf("refresh auth result = %s, want %s", refreshed.AuthResult, authResultOngoing)
+	}
+
+	_, err = authService.Confirm(
+		context.Background(),
+		"auth-1",
+		"",
+		"",
+		"EAP-Response/AKA'-Challenge RES*=stale-token",
+	)
+	assertAPIError(t, err, http.StatusUnauthorized, authenticationRejectedCause, "EAP-AKA' verification failed")
+
+	storedContext, lookupErr := authService.Lookup("auth-1")
+	if lookupErr != nil {
+		t.Fatalf("Lookup() error = %v", lookupErr)
+	}
+	if storedContext.Status != "FAILED" {
+		t.Fatalf("stored status = %s, want FAILED", storedContext.Status)
+	}
+	if storedContext.EapSession == nil || storedContext.EapSession.Payload != eapFailurePayload {
+		t.Fatalf("stored eap session = %#v, want EAP-Failure payload", storedContext.EapSession)
+	}
+	if storedContext.KSEAF != "" {
+		t.Fatalf("stored kseaf = %s, want empty", storedContext.KSEAF)
+	}
+}
+
+func TestConfirmShouldReturnOngoingWithRefreshedEapChallengeOnReauthentication(t *testing.T) {
+	authService := NewAuthService(stubControlPlaneClient{
+		confirmResponse: controlplane.AuthenticationResponse{
+			Success:      true,
+			RAND:         "rand-2",
+			AUTN:         "autn-2",
+			HXRESStar:    "hxres-2",
+			EapChallenge: "EAP-Request/AKA'-Challenge refreshed-token",
+			Message:      "EAP-AKA' re-authentication challenge generated",
+		},
+	}, nil)
+	mustSaveContext(t, authService, AuthContext{
+		AuthCtxID:          "auth-eap-1",
+		SUPI:               "imsi-250010000000002",
+		AuthType:           authTypeEapAkaPrime,
+		ServingNetworkName: "5G:mnc001.mcc001.3gppnetwork.org",
+		Status:             authStatusChallengeSent,
+		EapSession: &EapSession{
+			Method:    "EAP-AKA'",
+			Payload:   "EAP-Request/AKA'-Challenge old-token",
+			SessionID: "auth-eap-1",
+		},
+	})
+
+	result, err := authService.Confirm(context.Background(), "auth-eap-1", "", "", "EAP-Response/AKA'-Reauthentication token")
+	if err != nil {
+		t.Fatalf("Confirm() error = %v", err)
+	}
+	if result.AuthResult != authResultOngoing {
+		t.Fatalf("Confirm() auth result = %s, want %s", result.AuthResult, authResultOngoing)
+	}
+	if result.EapSession == nil || result.EapSession.Payload != "EAP-Request/AKA'-Challenge refreshed-token" {
+		t.Fatalf("Confirm() eap session = %#v, want refreshed challenge", result.EapSession)
+	}
+	storedContext, lookupErr := authService.Lookup("auth-eap-1")
+	if lookupErr != nil {
+		t.Fatalf("Lookup() error = %v", lookupErr)
+	}
+	if storedContext.Status != authStatusChallengeSent {
+		t.Fatalf("stored status = %s, want %s", storedContext.Status, authStatusChallengeSent)
+	}
+	if storedContext.EapSession == nil || storedContext.EapSession.Payload != "EAP-Request/AKA'-Challenge refreshed-token" {
+		t.Fatalf("stored eap session = %#v, want refreshed challenge", storedContext.EapSession)
+	}
+	if storedContext.KSEAF != "" {
+		t.Fatalf("stored kseaf = %s, want empty", storedContext.KSEAF)
+	}
+}
+
+func TestConfirmShouldReturnOngoingWithRefreshedEapChallengeOnFastReauthentication(t *testing.T) {
+	authService := NewAuthService(stubControlPlaneClient{
+		confirmResponse: controlplane.AuthenticationResponse{
+			Success:      true,
+			RAND:         "rand-2",
+			AUTN:         "autn-2",
+			HXRESStar:    "hxres-2",
+			EapChallenge: "EAP-Request/AKA'-Challenge refreshed-fast-token",
+			Message:      "EAP-AKA' fast re-authentication challenge generated",
+		},
+	}, nil)
+	mustSaveContext(t, authService, AuthContext{
+		AuthCtxID:          "auth-eap-fast-1",
+		SUPI:               "imsi-250010000000002",
+		AuthType:           authTypeEapAkaPrime,
+		ServingNetworkName: "5G:mnc001.mcc001.3gppnetwork.org",
+		Status:             authStatusChallengeSent,
+		EapSession: &EapSession{
+			Method:    "EAP-AKA'",
+			Payload:   "EAP-Request/AKA'-Challenge old-token",
+			SessionID: "auth-eap-fast-1",
+		},
+	})
+
+	result, err := authService.Confirm(context.Background(), "auth-eap-fast-1", "", "", "EAP-Response/AKA'-Fast-Reauthentication token")
+	if err != nil {
+		t.Fatalf("Confirm() error = %v", err)
+	}
+	if result.AuthResult != authResultOngoing {
+		t.Fatalf("Confirm() auth result = %s, want %s", result.AuthResult, authResultOngoing)
+	}
+	if result.EapSession == nil || result.EapSession.Payload != "EAP-Request/AKA'-Challenge refreshed-fast-token" {
+		t.Fatalf("Confirm() eap session = %#v, want refreshed fast challenge", result.EapSession)
+	}
+	storedContext, lookupErr := authService.Lookup("auth-eap-fast-1")
+	if lookupErr != nil {
+		t.Fatalf("Lookup() error = %v", lookupErr)
+	}
+	if storedContext.Status != authStatusChallengeSent {
+		t.Fatalf("stored status = %s, want %s", storedContext.Status, authStatusChallengeSent)
+	}
+	if storedContext.EapSession == nil || storedContext.EapSession.Payload != "EAP-Request/AKA'-Challenge refreshed-fast-token" {
+		t.Fatalf("stored eap session = %#v, want refreshed fast challenge", storedContext.EapSession)
+	}
+	if storedContext.KSEAF != "" {
+		t.Fatalf("stored kseaf = %s, want empty", storedContext.KSEAF)
+	}
+}
+
+func TestConfirmShouldReturnOngoingWithRefreshedEapChallengeOnSynchronizationFailure(t *testing.T) {
+	authService := NewAuthService(stubControlPlaneClient{
+		confirmResponse: controlplane.AuthenticationResponse{
+			Success:      true,
+			RAND:         "rand-2",
+			AUTN:         "autn-2",
+			HXRESStar:    "hxres-2",
+			EapChallenge: "EAP-Request/AKA'-Challenge refreshed-sync-token",
+			Message:      "EAP-AKA' synchronization-failure challenge generated",
+		},
+	}, nil)
+	mustSaveContext(t, authService, AuthContext{
+		AuthCtxID:          "auth-eap-sync-1",
+		SUPI:               "imsi-250010000000002",
+		AuthType:           authTypeEapAkaPrime,
+		ServingNetworkName: "5G:mnc001.mcc001.3gppnetwork.org",
+		Status:             authStatusChallengeSent,
+		EapSession: &EapSession{
+			Method:    "EAP-AKA'",
+			Payload:   "EAP-Request/AKA'-Challenge old-token",
+			SessionID: "auth-eap-sync-1",
+		},
+	})
+
+	result, err := authService.Confirm(context.Background(), "auth-eap-sync-1", "", "", "EAP-Response/AKA'-Synchronization-Failure AUTS=auts-token")
+	if err != nil {
+		t.Fatalf("Confirm() error = %v", err)
+	}
+	if result.AuthResult != authResultOngoing {
+		t.Fatalf("Confirm() auth result = %s, want %s", result.AuthResult, authResultOngoing)
+	}
+	if result.EapSession == nil || result.EapSession.Payload != "EAP-Request/AKA'-Challenge refreshed-sync-token" {
+		t.Fatalf("Confirm() eap session = %#v, want refreshed sync-failure challenge", result.EapSession)
+	}
+	storedContext, lookupErr := authService.Lookup("auth-eap-sync-1")
+	if lookupErr != nil {
+		t.Fatalf("Lookup() error = %v", lookupErr)
+	}
+	if storedContext.Status != authStatusChallengeSent {
+		t.Fatalf("stored status = %s, want %s", storedContext.Status, authStatusChallengeSent)
+	}
+	if storedContext.EapSession == nil || storedContext.EapSession.Payload != "EAP-Request/AKA'-Challenge refreshed-sync-token" {
+		t.Fatalf("stored eap session = %#v, want refreshed sync-failure challenge", storedContext.EapSession)
+	}
+	if storedContext.KSEAF != "" {
+		t.Fatalf("stored kseaf = %s, want empty", storedContext.KSEAF)
+	}
+}
+
+func TestConfirmShouldReturnSyncFailureWithRefreshedChallengeWhenAutsIsProvided(t *testing.T) {
+	authService := NewAuthService(stubControlPlaneClient{
+		confirmResponse: controlplane.AuthenticationResponse{
+			Success:   true,
+			RAND:      "rand-2",
+			AUTN:      "autn-2",
+			HXRESStar: "hxres-2",
+			Message:   "re-synchronization challenge generated",
+		},
+	}, nil)
+	mustSaveContext(t, authService, AuthContext{
+		AuthCtxID:          "auth-1",
+		SUPI:               "imsi-250010000000001",
+		AuthType:           authTypeFiveGAka,
+		ServingNetworkName: "5G:mnc001.mcc001.3gppnetwork.org",
+		Status:             authStatusChallengeSent,
+	})
+
+	result, err := authService.Confirm(context.Background(), "auth-1", "", "auts-token", "")
+	if err != nil {
+		t.Fatalf("Confirm() error = %v", err)
+	}
+	if result.AuthResult != authResultSyncFailure {
+		t.Fatalf("Confirm() auth result = %s, want %s", result.AuthResult, authResultSyncFailure)
+	}
+	if result.AuthData == nil || result.AuthData.RAND != "rand-2" {
+		t.Fatalf("Confirm() auth data = %#v, want refreshed challenge", result.AuthData)
+	}
+	storedContext, err := authService.Lookup("auth-1")
+	if err != nil {
+		t.Fatalf("Lookup() error = %v", err)
+	}
+	if storedContext.Status != authStatusChallengeSent {
+		t.Fatalf("stored status = %s, want %s", storedContext.Status, authStatusChallengeSent)
+	}
+	if storedContext.AuthData.RAND != "rand-2" {
+		t.Fatalf("stored rand = %s, want rand-2", storedContext.AuthData.RAND)
+	}
+	if storedContext.KSEAF != "" {
+		t.Fatalf("stored kseaf = %s, want empty", storedContext.KSEAF)
+	}
+}
+
+type staleFiveGAkaAfterResyncControlPlaneClient struct{}
+
+func (staleFiveGAkaAfterResyncControlPlaneClient) Initiate(_ context.Context, request controlplane.AuthenticationRequest) (controlplane.AuthenticationResponse, error) {
+	return controlplane.AuthenticationResponse{
+		Success:            true,
+		SUPI:               request.SUPI,
+		AuthType:           request.AuthType,
+		ServingNetworkName: request.ServingNetworkName,
+		RAND:               "rand-1",
+		AUTN:               "autn-1",
+		HXRESStar:          "hxres-1",
+	}, nil
+}
+
+func (staleFiveGAkaAfterResyncControlPlaneClient) Confirm(_ context.Context, _ string, request controlplane.AuthenticationRequest) (controlplane.AuthenticationResponse, error) {
+	switch {
+	case request.AUTS == "auts-token":
+		return controlplane.AuthenticationResponse{
+			Success:   true,
+			RAND:      "rand-2",
+			AUTN:      "autn-2",
+			HXRESStar: "hxres-2",
+			Message:   "re-synchronization challenge generated",
+		}, nil
+	case request.ResStar == "stale-token":
+		return controlplane.AuthenticationResponse{}, controlplane.APIError{
+			StatusCode: http.StatusUnauthorized,
+			Message:    "RES* verification failed",
+			ErrorCode:  authenticationRejectedCause,
+		}
+	default:
+		return controlplane.AuthenticationResponse{}, errors.New("unexpected 5G_AKA confirmation payload")
+	}
+}
+
+func (staleFiveGAkaAfterResyncControlPlaneClient) Context(_ context.Context, _ string) (controlplane.AuthenticationResponse, error) {
+	return controlplane.AuthenticationResponse{}, nil
+}
+
+type staleAutsAfterResyncControlPlaneClient struct {
+	autsAttempts int
+}
+
+func (client *staleAutsAfterResyncControlPlaneClient) Initiate(_ context.Context, request controlplane.AuthenticationRequest) (controlplane.AuthenticationResponse, error) {
+	return controlplane.AuthenticationResponse{
+		Success:            true,
+		SUPI:               request.SUPI,
+		AuthType:           request.AuthType,
+		ServingNetworkName: request.ServingNetworkName,
+		RAND:               "rand-1",
+		AUTN:               "autn-1",
+		HXRESStar:          "hxres-1",
+	}, nil
+}
+
+func (client *staleAutsAfterResyncControlPlaneClient) Confirm(_ context.Context, _ string, request controlplane.AuthenticationRequest) (controlplane.AuthenticationResponse, error) {
+	switch {
+	case request.AUTS == "auts-token":
+		client.autsAttempts++
+		if client.autsAttempts == 1 {
+			return controlplane.AuthenticationResponse{
+				Success:   true,
+				RAND:      "rand-2",
+				AUTN:      "autn-2",
+				HXRESStar: "hxres-2",
+				Message:   "re-synchronization challenge generated",
+			}, nil
+		}
+		return controlplane.AuthenticationResponse{}, controlplane.APIError{
+			StatusCode: http.StatusUnauthorized,
+			Message:    "AUTS verification failed",
+			ErrorCode:  authenticationRejectedCause,
+		}
+	default:
+		return controlplane.AuthenticationResponse{}, errors.New("unexpected 5G_AKA confirmation payload")
+	}
+}
+
+func (client *staleAutsAfterResyncControlPlaneClient) Context(_ context.Context, _ string) (controlplane.AuthenticationResponse, error) {
+	return controlplane.AuthenticationResponse{}, nil
+}
+
+func TestConfirmShouldRejectStaleResStarAfterSyncFailureRefresh(t *testing.T) {
+	authService := NewAuthService(staleFiveGAkaAfterResyncControlPlaneClient{}, nil)
+
+	_, err := authService.CreateUEAuthentication(
+		context.Background(),
+		"imsi-250010000000001",
+		"5G:mnc001.mcc001.3gppnetwork.org",
+		authTypeFiveGAka,
+		"",
+	)
+	if err != nil {
+		t.Fatalf("CreateUEAuthentication() error = %v", err)
+	}
+
+	refreshed, err := authService.Confirm(context.Background(), "auth-1", "", "auts-token", "")
+	if err != nil {
+		t.Fatalf("Confirm() resync error = %v", err)
+	}
+	if refreshed.AuthResult != authResultSyncFailure {
+		t.Fatalf("resync auth result = %s, want %s", refreshed.AuthResult, authResultSyncFailure)
+	}
+
+	_, err = authService.Confirm(context.Background(), "auth-1", "stale-token", "", "")
+	assertAPIError(t, err, http.StatusUnauthorized, authenticationRejectedCause, "RES* verification failed")
+
+	storedContext, lookupErr := authService.Lookup("auth-1")
+	if lookupErr != nil {
+		t.Fatalf("Lookup() error = %v", lookupErr)
+	}
+	if storedContext.Status != "FAILED" {
+		t.Fatalf("stored status = %s, want FAILED", storedContext.Status)
+	}
+	if storedContext.AuthData.RAND != "rand-2" {
+		t.Fatalf("stored rand = %s, want rand-2", storedContext.AuthData.RAND)
+	}
+	if storedContext.KSEAF != "" {
+		t.Fatalf("stored kseaf = %s, want empty", storedContext.KSEAF)
+	}
+}
+
+func TestConfirmShouldRejectStaleAutsAfterSyncFailureRefresh(t *testing.T) {
+	authService := NewAuthService(&staleAutsAfterResyncControlPlaneClient{}, nil)
+
+	_, err := authService.CreateUEAuthentication(
+		context.Background(),
+		"imsi-250010000000001",
+		"5G:mnc001.mcc001.3gppnetwork.org",
+		authTypeFiveGAka,
+		"",
+	)
+	if err != nil {
+		t.Fatalf("CreateUEAuthentication() error = %v", err)
+	}
+
+	refreshed, err := authService.Confirm(context.Background(), "auth-1", "", "auts-token", "")
+	if err != nil {
+		t.Fatalf("Confirm() resync error = %v", err)
+	}
+	if refreshed.AuthResult != authResultSyncFailure {
+		t.Fatalf("resync auth result = %s, want %s", refreshed.AuthResult, authResultSyncFailure)
+	}
+
+	_, err = authService.Confirm(context.Background(), "auth-1", "", "auts-token", "")
+	assertAPIError(t, err, http.StatusUnauthorized, authenticationRejectedCause, "AUTS verification failed")
+
+	storedContext, lookupErr := authService.Lookup("auth-1")
+	if lookupErr != nil {
+		t.Fatalf("Lookup() error = %v", lookupErr)
+	}
+	if storedContext.Status != "FAILED" {
+		t.Fatalf("stored status = %s, want FAILED", storedContext.Status)
+	}
+	if storedContext.AuthData.RAND != "rand-2" {
+		t.Fatalf("stored rand = %s, want rand-2", storedContext.AuthData.RAND)
+	}
+	if storedContext.KSEAF != "" {
+		t.Fatalf("stored kseaf = %s, want empty", storedContext.KSEAF)
+	}
+}
+
+func TestConfirmShouldRejectNonPendingContext(t *testing.T) {
+	authService := NewAuthService(stubControlPlaneClient{
+		confirmResponse: controlplane.AuthenticationResponse{
+			Success: true,
+			KSEAF:   "kseaf-1",
+			Message: "authentication successful",
+		},
+	}, nil)
+	mustSaveContext(t, authService, AuthContext{
+		AuthCtxID:          "auth-1",
+		SUPI:               "imsi-250010000000001",
+		AuthType:           authTypeFiveGAka,
+		ServingNetworkName: "5G:mnc001.mcc001.3gppnetwork.org",
+		Status:             authStatusAuthenticated,
+	})
+
+	_, err := authService.Confirm(context.Background(), "auth-1", "res-star", "", "")
+	assertAPIError(t, err, http.StatusUnauthorized, authenticationRejectedCause, "authentication context is no longer pending")
+}
+
+func TestConfirmShouldRejectAlreadyFailedFiveGAkaContext(t *testing.T) {
+	authService := NewAuthService(stubControlPlaneClient{}, nil)
+	mustSaveContext(t, authService, AuthContext{
+		AuthCtxID:          "auth-1",
+		SUPI:               "imsi-250010000000001",
+		AuthType:           authTypeFiveGAka,
+		ServingNetworkName: "5G:mnc001.mcc001.3gppnetwork.org",
+		Status:             "FAILED",
+		AuthData: AuthData{
+			RAND:      "rand-1",
+			AUTN:      "autn-1",
+			HXRESStar: "hxres-1",
+		},
+	})
+
+	_, err := authService.Confirm(context.Background(), "auth-1", "res-star", "", "")
+	assertAPIError(t, err, http.StatusUnauthorized, authenticationRejectedCause, "authentication context is no longer pending")
+}
+
+func TestConfirmShouldRejectAutsForNonFiveGAkaContext(t *testing.T) {
+	authService := NewAuthService(stubControlPlaneClient{
+		confirmResponse: controlplane.AuthenticationResponse{
+			Success:   true,
+			RAND:      "rand-2",
+			AUTN:      "autn-2",
+			HXRESStar: "hxres-2",
+			Message:   "re-synchronization challenge generated",
+		},
+	}, nil)
+	mustSaveContext(t, authService, AuthContext{
+		AuthCtxID:          "auth-1",
+		SUPI:               "imsi-250010000000002",
+		AuthType:           authTypeEapAkaPrime,
+		ServingNetworkName: "5G:mnc001.mcc001.3gppnetwork.org",
+		Status:             authStatusChallengeSent,
+	})
+
+	_, err := authService.Confirm(context.Background(), "auth-1", "", "auts-token", "")
+	assertAPIError(t, err, http.StatusUnauthorized, authenticationRejectedCause, "AUTS re-synchronization is only valid for 5G_AKA")
+}
+
+func TestConfirmShouldRejectAmbiguousFiveGAkaPayload(t *testing.T) {
+	authService := NewAuthService(stubControlPlaneClient{
+		confirmResponse: controlplane.AuthenticationResponse{
+			Success: true,
+			KSEAF:   "kseaf-1",
+			Message: "authentication successful",
+		},
+	}, nil)
+	mustSaveContext(t, authService, AuthContext{
+		AuthCtxID:          "auth-1",
+		SUPI:               "imsi-250010000000001",
+		AuthType:           authTypeFiveGAka,
+		ServingNetworkName: "5G:mnc001.mcc001.3gppnetwork.org",
+		Status:             authStatusChallengeSent,
+	})
+
+	_, err := authService.Confirm(context.Background(), "auth-1", "res-star", "auts-token", "")
+	assertAPIError(t, err, http.StatusUnauthorized, authenticationRejectedCause, "5G_AKA confirmation must provide exactly one of RES* or AUTS")
 }
 
 func TestLookupShouldReturnPersistedContextAcrossServiceRecreation(t *testing.T) {
@@ -324,7 +890,7 @@ func TestConfirmShouldReturnContextNotFoundAfterTTLExpiration(t *testing.T) {
 
 	time.Sleep(50 * time.Millisecond)
 
-	_, confirmErr := authService.Confirm(context.Background(), created.AuthCtxID, "deadbeef", "")
+	_, confirmErr := authService.Confirm(context.Background(), created.AuthCtxID, "deadbeef", "", "")
 	assertAPIError(t, confirmErr, http.StatusNotFound, contextNotFoundCause, "authentication context not found")
 }
 
@@ -394,6 +960,9 @@ func mustSaveContext(t *testing.T, authService *AuthService, context AuthContext
 	t.Helper()
 	if context.CreatedAt.IsZero() {
 		context.CreatedAt = time.Now().UTC()
+	}
+	if context.Status == "" {
+		context.Status = authStatusChallengeSent
 	}
 	if err := authService.store.Save(context); err != nil {
 		t.Fatalf("save context error = %v", err)

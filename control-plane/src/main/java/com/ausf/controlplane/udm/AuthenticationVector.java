@@ -4,6 +4,7 @@ public class AuthenticationVector {
     private final String authType;
     private final String rand;
     private final String autn;
+    private final String auts;
     private final String xresStar;
     private final String hxresStar;
     private final String kausf;
@@ -13,6 +14,7 @@ public class AuthenticationVector {
         String authType,
         String rand,
         String autn,
+        String auts,
         String xresStar,
         String hxresStar,
         String kausf,
@@ -21,6 +23,7 @@ public class AuthenticationVector {
         this.authType = authType;
         this.rand = rand;
         this.autn = autn;
+        this.auts = auts;
         this.xresStar = xresStar;
         this.hxresStar = hxresStar;
         this.kausf = kausf;
@@ -37,6 +40,10 @@ public class AuthenticationVector {
 
     public String getAutn() {
         return autn;
+    }
+
+    public String getAuts() {
+        return auts;
     }
 
     public String getXresStar() {

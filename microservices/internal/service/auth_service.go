@@ -38,6 +38,8 @@ type EapSession struct {
 	SessionID string `json:"sessionId"`
 }
 
+const eapFailurePayload = "EAP-Failure"
+
 type AuthLinks struct {
 	FiveGAka   *Link `json:"5g-aka,omitempty"`
 	EapSession *Link `json:"eap-session,omitempty"`
@@ -48,17 +50,20 @@ type Link struct {
 }
 
 type ConfirmationResult struct {
-	AuthCtxID  string `json:"authCtxId"`
-	SUPI       string `json:"supi"`
-	AuthResult string `json:"authResult"`
-	KSEAF      string `json:"kseaf,omitempty"`
-	Message    string `json:"message,omitempty"`
+	AuthCtxID  string      `json:"authCtxId"`
+	SUPI       string      `json:"supi"`
+	AuthResult string      `json:"authResult"`
+	AuthData   *AuthData   `json:"5gAuthData,omitempty"`
+	EapSession *EapSession `json:"eapSession,omitempty"`
+	KSEAF      string      `json:"kseaf,omitempty"`
+	Message    string      `json:"message,omitempty"`
 }
 
 type APIError struct {
 	StatusCode int
 	Message    string
 	Cause      string
+	EapPayload string
 }
 
 func (error APIError) Error() string {
@@ -85,7 +90,7 @@ type authMetricsRecorder interface {
 
 type controlPlaneAPI interface {
 	Initiate(ctx context.Context, request controlplane.AuthenticationRequest) (controlplane.AuthenticationResponse, error)
-	Confirm(ctx context.Context, supi string, request controlplane.AuthenticationRequest) (controlplane.AuthenticationResponse, error)
+	Confirm(ctx context.Context, authCtxID string, request controlplane.AuthenticationRequest) (controlplane.AuthenticationResponse, error)
 	Context(ctx context.Context, supi string) (controlplane.AuthenticationResponse, error)
 }
 
@@ -131,7 +136,13 @@ func (service *AuthService) CreateUEAuthentication(ctx context.Context, supi str
 		return AuthContext{}, err
 	}
 
+	authCtxID, err := service.store.NextAuthCtxID()
+	if err != nil {
+		return AuthContext{}, contextStoreError("auth context allocation failed", err)
+	}
+
 	response, err := service.controlPlaneClient.Initiate(ctx, controlplane.AuthenticationRequest{
+		AuthCtxID:          authCtxID,
 		SUPI:               supi,
 		ServingNetworkName: servingNetworkName,
 		AuthType:           authType,
@@ -144,10 +155,6 @@ func (service *AuthService) CreateUEAuthentication(ctx context.Context, supi str
 		return AuthContext{}, mappedErr
 	}
 
-	authCtxID, err := service.store.NextAuthCtxID()
-	if err != nil {
-		return AuthContext{}, contextStoreError("auth context allocation failed", err)
-	}
 	context := AuthContext{
 		AuthCtxID:          authCtxID,
 		SUPI:               response.SUPI,
@@ -169,7 +176,7 @@ func (service *AuthService) CreateUEAuthentication(ctx context.Context, supi str
 	return context, nil
 }
 
-func (service *AuthService) Confirm(ctx context.Context, authCtxID string, resStar string, eapPayload string) (ConfirmationResult, error) {
+func (service *AuthService) Confirm(ctx context.Context, authCtxID string, resStar string, auts string, eapPayload string) (ConfirmationResult, error) {
 	service.mu.Lock()
 	defer service.mu.Unlock()
 
@@ -177,17 +184,78 @@ func (service *AuthService) Confirm(ctx context.Context, authCtxID string, resSt
 	if err != nil {
 		return ConfirmationResult{}, err
 	}
+	if context.Status != authStatusChallengeSent {
+		return ConfirmationResult{}, contextNotPendingError()
+	}
+	if context.AuthType == authTypeFiveGAka && !isValidFiveGAkaConfirmationPayload(resStar, auts) {
+		return ConfirmationResult{}, invalidFiveGAkaConfirmationError()
+	}
+	if auts != "" && context.AuthType != authTypeFiveGAka {
+		return ConfirmationResult{}, invalidAutsForAuthTypeError()
+	}
 
-	response, err := service.controlPlaneClient.Confirm(ctx, context.SUPI, controlplane.AuthenticationRequest{
+	response, err := service.controlPlaneClient.Confirm(ctx, authCtxID, controlplane.AuthenticationRequest{
 		ResStar:    resStar,
+		AUTS:       auts,
 		EapPayload: eapPayload,
 	})
 	if err != nil {
 		mappedErr := mapConfirmError(err)
+		if mappedErr.Cause == authenticationRejectedCause {
+			context.Status = "FAILED"
+			if context.AuthType == authTypeEapAkaPrime && context.EapSession != nil {
+				if mappedErr.EapPayload != "" {
+					context.EapSession.Payload = mappedErr.EapPayload
+				} else {
+					context.EapSession.Payload = eapFailurePayload
+				}
+			}
+			if saveErr := service.store.Save(context); saveErr != nil {
+				return ConfirmationResult{}, contextStoreError("auth context update failed", saveErr)
+			}
+		}
 		if service.recorder != nil {
 			service.recorder.RecordAuthFailed(mappedErr.Cause)
 		}
 		return ConfirmationResult{}, mappedErr
+	}
+
+	if shouldReissueFiveGAkaChallenge(context, response) {
+		context.AuthData = AuthData{
+			RAND:      response.RAND,
+			AUTN:      response.AUTN,
+			HXRESStar: response.HXRESStar,
+		}
+		context.KSEAF = ""
+		context.Status = authStatusChallengeSent
+		if err := service.store.Save(context); err != nil {
+			return ConfirmationResult{}, contextStoreError("auth context update failed", err)
+		}
+
+		return ConfirmationResult{
+			AuthCtxID:  authCtxID,
+			SUPI:       context.SUPI,
+			AuthResult: authResultSyncFailure,
+			AuthData:   &context.AuthData,
+			Message:    response.Message,
+		}, nil
+	}
+
+	if shouldContinueEapSession(context, response) {
+		context = initializeEapAkaPrimeContext(context, response.EapChallenge)
+		context.KSEAF = ""
+		context.Status = authStatusChallengeSent
+		if err := service.store.Save(context); err != nil {
+			return ConfirmationResult{}, contextStoreError("auth context update failed", err)
+		}
+
+		return ConfirmationResult{
+			AuthCtxID:  authCtxID,
+			SUPI:       context.SUPI,
+			AuthResult: authResultOngoing,
+			EapSession: context.EapSession,
+			Message:    response.Message,
+		}, nil
 	}
 
 	context.KSEAF = response.KSEAF
@@ -223,6 +291,12 @@ func (service *AuthService) Confirm(ctx context.Context, authCtxID string, resSt
 		KSEAF:      context.KSEAF,
 		Message:    response.Message,
 	}, nil
+}
+
+func isValidFiveGAkaConfirmationPayload(resStar string, auts string) bool {
+	hasResStar := resStar != ""
+	hasAuts := auts != ""
+	return hasResStar != hasAuts
 }
 
 func (service *AuthService) Lookup(authCtxID string) (AuthContext, error) {
@@ -315,4 +389,12 @@ func logServiceJSON(level, msg string, fields map[string]any) {
 	fields["msg"] = msg
 	data, _ := json.Marshal(fields)
 	_, _ = fmt.Fprintln(os.Stderr, string(data))
+}
+
+func shouldReissueFiveGAkaChallenge(context AuthContext, response controlplane.AuthenticationResponse) bool {
+	return context.AuthType == authTypeFiveGAka && response.KSEAF == "" && response.RAND != "" && response.AUTN != "" && response.HXRESStar != ""
+}
+
+func shouldContinueEapSession(context AuthContext, response controlplane.AuthenticationResponse) bool {
+	return context.AuthType == authTypeEapAkaPrime && response.KSEAF == "" && response.EapChallenge != ""
 }

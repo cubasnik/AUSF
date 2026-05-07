@@ -101,6 +101,76 @@ func TestRoutesShouldReturnTraceHeaders(t *testing.T) {
 	}
 }
 
+func TestCreateUEAuthenticationShouldRequireBearerTokenWhenConfigured(t *testing.T) {
+	handler := NewHandlerWithAuthorization(service.NewAuthService(stubControlPlaneClient{}, nil), AuthorizationConfig{BearerToken: "secret-token"}).Routes()
+	payload := map[string]string{
+		"supiOrSuci":         "imsi-250010000000001",
+		"servingNetworkName": "5G:mnc001.mcc001.3gppnetwork.org",
+		"authType":           "5G_AKA",
+	}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("Marshal() error = %v", err)
+	}
+
+	request := httptest.NewRequest(http.MethodPost, "/nausf-auth/v1/ue-authentications", bytes.NewReader(body))
+	request.Header.Set("Content-Type", "application/json")
+	response := httptest.NewRecorder()
+
+	handler.ServeHTTP(response, request)
+
+	if response.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusUnauthorized)
+	}
+	if response.Header().Get("WWW-Authenticate") != "Bearer" {
+		t.Fatalf("WWW-Authenticate = %s, want Bearer", response.Header().Get("WWW-Authenticate"))
+	}
+
+	var problem ProblemDetails
+	if err := json.Unmarshal(response.Body.Bytes(), &problem); err != nil {
+		t.Fatalf("Unmarshal() error = %v", err)
+	}
+	if problem.Cause != "UNAUTHORIZED" {
+		t.Fatalf("cause = %s, want UNAUTHORIZED", problem.Cause)
+	}
+}
+
+func TestCreateUEAuthenticationShouldAcceptConfiguredBearerToken(t *testing.T) {
+	handler := NewHandlerWithAuthorization(service.NewAuthService(stubControlPlaneClient{}, nil), AuthorizationConfig{BearerToken: "secret-token"}).Routes()
+	payload := map[string]string{
+		"supiOrSuci":         "imsi-250010000000001",
+		"servingNetworkName": "5G:mnc001.mcc001.3gppnetwork.org",
+		"authType":           "5G_AKA",
+	}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("Marshal() error = %v", err)
+	}
+
+	request := httptest.NewRequest(http.MethodPost, "/nausf-auth/v1/ue-authentications", bytes.NewReader(body))
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Authorization", "Bearer secret-token")
+	response := httptest.NewRecorder()
+
+	handler.ServeHTTP(response, request)
+
+	if response.Code != http.StatusCreated {
+		t.Fatalf("status = %d, want %d, body = %s", response.Code, http.StatusCreated, response.Body.String())
+	}
+}
+
+func TestHealthShouldNotRequireBearerTokenWhenConfigured(t *testing.T) {
+	handler := NewHandlerWithAuthorization(service.NewAuthService(stubControlPlaneClient{}, nil), AuthorizationConfig{BearerToken: "secret-token"}).Routes()
+	request := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+	response := httptest.NewRecorder()
+
+	handler.ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusOK)
+	}
+}
+
 func TestCreateUEAuthenticationShouldRejectMalformedJSON(t *testing.T) {
 	handler := NewHandler(service.NewAuthService(stubControlPlaneClient{}, nil)).Routes()
 	request := httptest.NewRequest(http.MethodPost, "/nausf-auth/v1/ue-authentications", bytes.NewReader([]byte(`{"supiOrSuci":`)))
@@ -279,6 +349,54 @@ func TestFiveGAkaConfirmationShouldRejectEapPayload(t *testing.T) {
 	}
 }
 
+func TestFiveGAkaConfirmationShouldRejectEmptyPayloadWithMandatoryIEMissing(t *testing.T) {
+	handler := NewHandler(service.NewAuthService(stubControlPlaneClient{}, nil)).Routes()
+	request := httptest.NewRequest(http.MethodPost, "/nausf-auth/v1/ue-authentications/auth-1/5g-aka-confirmation", bytes.NewReader([]byte(`{}`)))
+	request.Header.Set("Content-Type", "application/json")
+	response := httptest.NewRecorder()
+
+	handler.ServeHTTP(response, request)
+
+	if response.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusBadRequest)
+	}
+
+	var problem ProblemDetails
+	if err := json.Unmarshal(response.Body.Bytes(), &problem); err != nil {
+		t.Fatalf("Unmarshal() error = %v", err)
+	}
+	if problem.Cause != "MANDATORY_IE_MISSING" {
+		t.Fatalf("cause = %s, want MANDATORY_IE_MISSING", problem.Cause)
+	}
+	if problem.Detail != "resStar or auts is required" {
+		t.Fatalf("detail = %s, want resStar or auts is required", problem.Detail)
+	}
+}
+
+func TestFiveGAkaConfirmationShouldRejectAmbiguousResStarAndAuts(t *testing.T) {
+	handler := NewHandler(service.NewAuthService(stubControlPlaneClient{}, nil)).Routes()
+	request := httptest.NewRequest(http.MethodPost, "/nausf-auth/v1/ue-authentications/auth-1/5g-aka-confirmation", bytes.NewReader([]byte(`{"resStar":"deadbeef","auts":"auts-token"}`)))
+	request.Header.Set("Content-Type", "application/json")
+	response := httptest.NewRecorder()
+
+	handler.ServeHTTP(response, request)
+
+	if response.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusBadRequest)
+	}
+
+	var problem ProblemDetails
+	if err := json.Unmarshal(response.Body.Bytes(), &problem); err != nil {
+		t.Fatalf("Unmarshal() error = %v", err)
+	}
+	if problem.Cause != "INVALID_CONFIRMATION_PAYLOAD" {
+		t.Fatalf("cause = %s, want INVALID_CONFIRMATION_PAYLOAD", problem.Cause)
+	}
+	if problem.Detail != "exactly one of resStar or auts is required for 5g-aka-confirmation and eapPayload must be omitted" {
+		t.Fatalf("detail = %s, want invalid 5G_AKA confirmation payload detail", problem.Detail)
+	}
+}
+
 func TestEapSessionShouldRejectResStar(t *testing.T) {
 	handler := NewHandler(service.NewAuthService(stubControlPlaneClient{}, nil)).Routes()
 	request := httptest.NewRequest(http.MethodPost, "/nausf-auth/v1/ue-authentications/auth-eap/eap-session", bytes.NewReader([]byte(`{"resStar":"deadbeef"}`)))
@@ -300,9 +418,9 @@ func TestEapSessionShouldRejectResStar(t *testing.T) {
 	}
 }
 
-type failingConfirmControlPlaneClient struct{}
+type resyncConfirmControlPlaneClient struct{}
 
-func (failingConfirmControlPlaneClient) Initiate(request controlplane.AuthenticationRequest) (controlplane.AuthenticationResponse, error) {
+func (resyncConfirmControlPlaneClient) Initiate(_ context.Context, request controlplane.AuthenticationRequest) (controlplane.AuthenticationResponse, error) {
 	return controlplane.AuthenticationResponse{
 		Success:            true,
 		SUPI:               request.SUPI,
@@ -314,7 +432,191 @@ func (failingConfirmControlPlaneClient) Initiate(request controlplane.Authentica
 	}, nil
 }
 
-func (failingConfirmControlPlaneClient) Confirm(string, controlplane.AuthenticationRequest) (controlplane.AuthenticationResponse, error) {
+func (resyncConfirmControlPlaneClient) Confirm(_ context.Context, _ string, request controlplane.AuthenticationRequest) (controlplane.AuthenticationResponse, error) {
+	if request.AUTS == "" {
+		return controlplane.AuthenticationResponse{}, assertAnError("expected AUTS in confirm request")
+	}
+	return controlplane.AuthenticationResponse{
+		Success:   true,
+		RAND:      "rand-2",
+		AUTN:      "autn-2",
+		HXRESStar: "hxres-2",
+		Message:   "re-synchronization challenge generated",
+	}, nil
+}
+
+func (resyncConfirmControlPlaneClient) Context(_ context.Context, _ string) (controlplane.AuthenticationResponse, error) {
+	return controlplane.AuthenticationResponse{}, nil
+}
+
+func TestFiveGAkaConfirmationShouldAcceptAutsAndReturnSyncFailure(t *testing.T) {
+	authService := service.NewAuthService(resyncConfirmControlPlaneClient{}, nil)
+	handler := NewHandler(authService).Routes()
+
+	_, err := authService.CreateUEAuthentication(context.Background(), "imsi-250010000000001", "5G:mnc001.mcc001.3gppnetwork.org", "5G_AKA", "")
+	if err != nil {
+		t.Fatalf("CreateUEAuthentication() error = %v", err)
+	}
+
+	request := httptest.NewRequest(http.MethodPost, "/nausf-auth/v1/ue-authentications/auth-1/5g-aka-confirmation", bytes.NewReader([]byte(`{"auts":"auts-token"}`)))
+	request.Header.Set("Content-Type", "application/json")
+	response := httptest.NewRecorder()
+
+	handler.ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d, body = %s", response.Code, http.StatusOK, response.Body.String())
+	}
+
+	var result service.ConfirmationResult
+	if err := json.Unmarshal(response.Body.Bytes(), &result); err != nil {
+		t.Fatalf("Unmarshal() error = %v", err)
+	}
+	if result.AuthResult != "SYNC_FAILURE" {
+		t.Fatalf("auth result = %s, want SYNC_FAILURE", result.AuthResult)
+	}
+	if result.AuthData == nil || result.AuthData.RAND != "rand-2" {
+		t.Fatalf("auth data = %#v, want refreshed challenge", result.AuthData)
+	}
+}
+
+type reauthConfirmControlPlaneClient struct{}
+
+func (reauthConfirmControlPlaneClient) Initiate(_ context.Context, request controlplane.AuthenticationRequest) (controlplane.AuthenticationResponse, error) {
+	return controlplane.AuthenticationResponse{
+		Success:            true,
+		SUPI:               request.SUPI,
+		AuthType:           request.AuthType,
+		ServingNetworkName: request.ServingNetworkName,
+		EapChallenge:       "EAP-Request/AKA'-Challenge initial-token",
+	}, nil
+}
+
+func (reauthConfirmControlPlaneClient) Confirm(_ context.Context, _ string, request controlplane.AuthenticationRequest) (controlplane.AuthenticationResponse, error) {
+	if request.EapPayload != "EAP-Response/AKA'-Reauthentication token" {
+		return controlplane.AuthenticationResponse{}, assertAnError("expected re-authentication payload in confirm request")
+	}
+	return controlplane.AuthenticationResponse{
+		Success:      true,
+		RAND:         "rand-2",
+		AUTN:         "autn-2",
+		HXRESStar:    "hxres-2",
+		EapChallenge: "EAP-Request/AKA'-Challenge refreshed-token",
+		Message:      "EAP-AKA' re-authentication challenge generated",
+	}, nil
+}
+
+func (reauthConfirmControlPlaneClient) Context(_ context.Context, _ string) (controlplane.AuthenticationResponse, error) {
+	return controlplane.AuthenticationResponse{}, nil
+}
+
+func TestEapSessionShouldReturnOngoingWithRefreshedChallengeOnReauthentication(t *testing.T) {
+	authService := service.NewAuthService(reauthConfirmControlPlaneClient{}, nil)
+	handler := NewHandler(authService).Routes()
+
+	_, err := authService.CreateUEAuthentication(context.Background(), "imsi-250010000000002", "5G:mnc001.mcc001.3gppnetwork.org", "EAP_AKA_PRIME", "")
+	if err != nil {
+		t.Fatalf("CreateUEAuthentication() error = %v", err)
+	}
+
+	request := httptest.NewRequest(http.MethodPost, "/nausf-auth/v1/ue-authentications/auth-1/eap-session", bytes.NewReader([]byte(`{"eapPayload":"EAP-Response/AKA'-Reauthentication token"}`)))
+	request.Header.Set("Content-Type", "application/json")
+	response := httptest.NewRecorder()
+
+	handler.ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d, body = %s", response.Code, http.StatusOK, response.Body.String())
+	}
+
+	var result service.ConfirmationResult
+	if err := json.Unmarshal(response.Body.Bytes(), &result); err != nil {
+		t.Fatalf("Unmarshal() error = %v", err)
+	}
+	if result.AuthResult != "ONGOING" {
+		t.Fatalf("auth result = %s, want ONGOING", result.AuthResult)
+	}
+	if result.EapSession == nil || result.EapSession.Payload != "EAP-Request/AKA'-Challenge refreshed-token" {
+		t.Fatalf("eap session = %#v, want refreshed challenge", result.EapSession)
+	}
+}
+
+type fastReauthConfirmControlPlaneClient struct{}
+
+func (fastReauthConfirmControlPlaneClient) Initiate(_ context.Context, request controlplane.AuthenticationRequest) (controlplane.AuthenticationResponse, error) {
+	return controlplane.AuthenticationResponse{
+		Success:            true,
+		SUPI:               request.SUPI,
+		AuthType:           request.AuthType,
+		ServingNetworkName: request.ServingNetworkName,
+		EapChallenge:       "EAP-Request/AKA'-Challenge initial-token",
+	}, nil
+}
+
+func (fastReauthConfirmControlPlaneClient) Confirm(_ context.Context, _ string, request controlplane.AuthenticationRequest) (controlplane.AuthenticationResponse, error) {
+	if request.EapPayload != "EAP-Response/AKA'-Fast-Reauthentication token" {
+		return controlplane.AuthenticationResponse{}, assertAnError("expected fast re-authentication payload in confirm request")
+	}
+	return controlplane.AuthenticationResponse{
+		Success:      true,
+		RAND:         "rand-2",
+		AUTN:         "autn-2",
+		HXRESStar:    "hxres-2",
+		EapChallenge: "EAP-Request/AKA'-Challenge refreshed-fast-token",
+		Message:      "EAP-AKA' fast re-authentication challenge generated",
+	}, nil
+}
+
+func (fastReauthConfirmControlPlaneClient) Context(_ context.Context, _ string) (controlplane.AuthenticationResponse, error) {
+	return controlplane.AuthenticationResponse{}, nil
+}
+
+func TestEapSessionShouldReturnOngoingWithRefreshedChallengeOnFastReauthentication(t *testing.T) {
+	authService := service.NewAuthService(fastReauthConfirmControlPlaneClient{}, nil)
+	handler := NewHandler(authService).Routes()
+
+	_, err := authService.CreateUEAuthentication(context.Background(), "imsi-250010000000002", "5G:mnc001.mcc001.3gppnetwork.org", "EAP_AKA_PRIME", "")
+	if err != nil {
+		t.Fatalf("CreateUEAuthentication() error = %v", err)
+	}
+
+	request := httptest.NewRequest(http.MethodPost, "/nausf-auth/v1/ue-authentications/auth-1/eap-session", bytes.NewReader([]byte(`{"eapPayload":"EAP-Response/AKA'-Fast-Reauthentication token"}`)))
+	request.Header.Set("Content-Type", "application/json")
+	response := httptest.NewRecorder()
+
+	handler.ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d, body = %s", response.Code, http.StatusOK, response.Body.String())
+	}
+
+	var result service.ConfirmationResult
+	if err := json.Unmarshal(response.Body.Bytes(), &result); err != nil {
+		t.Fatalf("Unmarshal() error = %v", err)
+	}
+	if result.AuthResult != "ONGOING" {
+		t.Fatalf("auth result = %s, want ONGOING", result.AuthResult)
+	}
+	if result.EapSession == nil || result.EapSession.Payload != "EAP-Request/AKA'-Challenge refreshed-fast-token" {
+		t.Fatalf("eap session = %#v, want refreshed fast challenge", result.EapSession)
+	}
+}
+
+type failingConfirmControlPlaneClient struct{}
+
+func (failingConfirmControlPlaneClient) Initiate(_ context.Context, request controlplane.AuthenticationRequest) (controlplane.AuthenticationResponse, error) {
+	return controlplane.AuthenticationResponse{
+		Success:            true,
+		SUPI:               request.SUPI,
+		AuthType:           request.AuthType,
+		ServingNetworkName: request.ServingNetworkName,
+		RAND:               "rand",
+		AUTN:               "autn",
+		HXRESStar:          "hxres",
+	}, nil
+}
+
+func (failingConfirmControlPlaneClient) Confirm(_ context.Context, _ string, _ controlplane.AuthenticationRequest) (controlplane.AuthenticationResponse, error) {
 	return controlplane.AuthenticationResponse{}, controlplane.APIError{
 		StatusCode: http.StatusNotFound,
 		Message:    "authentication context missing or expired",
@@ -322,13 +624,13 @@ func (failingConfirmControlPlaneClient) Confirm(string, controlplane.Authenticat
 	}
 }
 
-func (failingConfirmControlPlaneClient) Context(string) (controlplane.AuthenticationResponse, error) {
+func (failingConfirmControlPlaneClient) Context(_ context.Context, _ string) (controlplane.AuthenticationResponse, error) {
 	return controlplane.AuthenticationResponse{}, nil
 }
 
 type failingInitiateControlPlaneClient struct{}
 
-func (failingInitiateControlPlaneClient) Initiate(controlplane.AuthenticationRequest) (controlplane.AuthenticationResponse, error) {
+func (failingInitiateControlPlaneClient) Initiate(_ context.Context, _ controlplane.AuthenticationRequest) (controlplane.AuthenticationResponse, error) {
 	return controlplane.AuthenticationResponse{}, controlplane.APIError{
 		StatusCode: http.StatusNotFound,
 		Message:    "subscriber not found in UDM storage",
@@ -336,31 +638,31 @@ func (failingInitiateControlPlaneClient) Initiate(controlplane.AuthenticationReq
 	}
 }
 
-func (failingInitiateControlPlaneClient) Confirm(string, controlplane.AuthenticationRequest) (controlplane.AuthenticationResponse, error) {
+func (failingInitiateControlPlaneClient) Confirm(_ context.Context, _ string, _ controlplane.AuthenticationRequest) (controlplane.AuthenticationResponse, error) {
 	return controlplane.AuthenticationResponse{}, nil
 }
 
-func (failingInitiateControlPlaneClient) Context(string) (controlplane.AuthenticationResponse, error) {
+func (failingInitiateControlPlaneClient) Context(_ context.Context, _ string) (controlplane.AuthenticationResponse, error) {
 	return controlplane.AuthenticationResponse{}, nil
 }
 
 type unavailableInitiateControlPlaneClient struct{}
 
-func (unavailableInitiateControlPlaneClient) Initiate(controlplane.AuthenticationRequest) (controlplane.AuthenticationResponse, error) {
+func (unavailableInitiateControlPlaneClient) Initiate(_ context.Context, _ controlplane.AuthenticationRequest) (controlplane.AuthenticationResponse, error) {
 	return controlplane.AuthenticationResponse{}, assertAnError("dial tcp 127.0.0.1:8081: connect: connection refused")
 }
 
-func (unavailableInitiateControlPlaneClient) Confirm(string, controlplane.AuthenticationRequest) (controlplane.AuthenticationResponse, error) {
+func (unavailableInitiateControlPlaneClient) Confirm(_ context.Context, _ string, _ controlplane.AuthenticationRequest) (controlplane.AuthenticationResponse, error) {
 	return controlplane.AuthenticationResponse{}, nil
 }
 
-func (unavailableInitiateControlPlaneClient) Context(string) (controlplane.AuthenticationResponse, error) {
+func (unavailableInitiateControlPlaneClient) Context(_ context.Context, _ string) (controlplane.AuthenticationResponse, error) {
 	return controlplane.AuthenticationResponse{}, nil
 }
 
 type failingRejectedConfirmControlPlaneClient struct{}
 
-func (failingRejectedConfirmControlPlaneClient) Initiate(request controlplane.AuthenticationRequest) (controlplane.AuthenticationResponse, error) {
+func (failingRejectedConfirmControlPlaneClient) Initiate(_ context.Context, request controlplane.AuthenticationRequest) (controlplane.AuthenticationResponse, error) {
 	return controlplane.AuthenticationResponse{
 		Success:            true,
 		SUPI:               request.SUPI,
@@ -372,7 +674,7 @@ func (failingRejectedConfirmControlPlaneClient) Initiate(request controlplane.Au
 	}, nil
 }
 
-func (failingRejectedConfirmControlPlaneClient) Confirm(string, controlplane.AuthenticationRequest) (controlplane.AuthenticationResponse, error) {
+func (failingRejectedConfirmControlPlaneClient) Confirm(_ context.Context, _ string, _ controlplane.AuthenticationRequest) (controlplane.AuthenticationResponse, error) {
 	return controlplane.AuthenticationResponse{}, controlplane.APIError{
 		StatusCode: http.StatusUnauthorized,
 		Message:    "RES* verification failed",
@@ -380,7 +682,7 @@ func (failingRejectedConfirmControlPlaneClient) Confirm(string, controlplane.Aut
 	}
 }
 
-func (failingRejectedConfirmControlPlaneClient) Context(string) (controlplane.AuthenticationResponse, error) {
+func (failingRejectedConfirmControlPlaneClient) Context(_ context.Context, _ string) (controlplane.AuthenticationResponse, error) {
 	return controlplane.AuthenticationResponse{}, nil
 }
 
@@ -466,6 +768,62 @@ func TestFiveGAkaConfirmationShouldPropagateAuthenticationRejectedCause(t *testi
 	}
 	if problem.Detail != "RES* verification failed" {
 		t.Fatalf("detail = %s, want RES* verification failed", problem.Detail)
+	}
+}
+
+type failingRejectedEapConfirmControlPlaneClient struct{}
+
+func (failingRejectedEapConfirmControlPlaneClient) Initiate(_ context.Context, request controlplane.AuthenticationRequest) (controlplane.AuthenticationResponse, error) {
+	return controlplane.AuthenticationResponse{
+		Success:            true,
+		SUPI:               request.SUPI,
+		AuthType:           request.AuthType,
+		ServingNetworkName: request.ServingNetworkName,
+		EapChallenge:       "EAP-Request/AKA'-Challenge token",
+	}, nil
+}
+
+func (failingRejectedEapConfirmControlPlaneClient) Confirm(_ context.Context, _ string, _ controlplane.AuthenticationRequest) (controlplane.AuthenticationResponse, error) {
+	return controlplane.AuthenticationResponse{}, controlplane.APIError{
+		StatusCode: http.StatusUnauthorized,
+		Message:    "EAP-AKA' verification failed",
+		ErrorCode:  "AUTHENTICATION_REJECTED",
+		EapPayload: "EAP-Failure",
+	}
+}
+
+func (failingRejectedEapConfirmControlPlaneClient) Context(_ context.Context, _ string) (controlplane.AuthenticationResponse, error) {
+	return controlplane.AuthenticationResponse{}, nil
+}
+
+func TestEapSessionShouldPropagateEapFailurePayload(t *testing.T) {
+	authService := service.NewAuthService(failingRejectedEapConfirmControlPlaneClient{}, nil)
+	handler := NewHandler(authService).Routes()
+
+	_, err := authService.CreateUEAuthentication(context.Background(), "imsi-250010000000002", "5G:mnc001.mcc001.3gppnetwork.org", "EAP_AKA_PRIME", "")
+	if err != nil {
+		t.Fatalf("CreateUEAuthentication() error = %v", err)
+	}
+
+	request := httptest.NewRequest(http.MethodPost, "/nausf-auth/v1/ue-authentications/auth-1/eap-session", bytes.NewReader([]byte(`{"eapPayload":"EAP-Response/AKA'-Challenge bad"}`)))
+	request.Header.Set("Content-Type", "application/json")
+	response := httptest.NewRecorder()
+
+	handler.ServeHTTP(response, request)
+
+	if response.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusUnauthorized)
+	}
+
+	var problem ProblemDetails
+	if err := json.Unmarshal(response.Body.Bytes(), &problem); err != nil {
+		t.Fatalf("Unmarshal() error = %v", err)
+	}
+	if problem.Cause != "AUTHENTICATION_REJECTED" {
+		t.Fatalf("cause = %s, want AUTHENTICATION_REJECTED", problem.Cause)
+	}
+	if problem.EapPayload != "EAP-Failure" {
+		t.Fatalf("eap payload = %s, want EAP-Failure", problem.EapPayload)
 	}
 }
 

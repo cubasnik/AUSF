@@ -1,25 +1,33 @@
 package com.ausf.controlplane.authentication;
 
 public class AuthenticationContext {
+    private final String authCtxId;
     private final String supi;
     private String authType;
     private String servingNetworkName;
     private String rand;
     private String autn;
+    private String auts;
     private String hxresStar;
     private String xresStar;
     private String eapChallenge;
     private String resStar;
     private String kseaf;
-    private String status;
+    private String kausf;
+    private AuthenticationStatus status;
     private final long createdAt;
     private final long expiresAt;
 
-    public AuthenticationContext(String supi) {
+    public AuthenticationContext(String authCtxId, String supi) {
+        this.authCtxId = authCtxId;
         this.supi = supi;
         this.createdAt = System.currentTimeMillis();
         this.expiresAt = createdAt + 300000;
-        this.status = "CREATED";
+        this.status = AuthenticationStatus.CREATED;
+    }
+
+    public String getAuthCtxId() {
+        return authCtxId;
     }
 
     public String getSupi() {
@@ -56,6 +64,14 @@ public class AuthenticationContext {
 
     public void setAutn(String autn) {
         this.autn = autn;
+    }
+
+    public String getAuts() {
+        return auts;
+    }
+
+    public void setAuts(String auts) {
+        this.auts = auts;
     }
 
     public String getHxresStar() {
@@ -98,11 +114,19 @@ public class AuthenticationContext {
         this.kseaf = kseaf;
     }
 
-    public String getStatus() {
+    public String getKausf() {
+        return kausf;
+    }
+
+    public void setKausf(String kausf) {
+        this.kausf = kausf;
+    }
+
+    public AuthenticationStatus getStatus() {
         return status;
     }
 
-    public void setStatus(String status) {
+    public void setStatus(AuthenticationStatus status) {
         this.status = status;
     }
 

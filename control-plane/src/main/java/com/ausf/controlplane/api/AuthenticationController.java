@@ -24,6 +24,7 @@ public class AuthenticationController {
     @PostMapping("/initiate")
     public ResponseEntity<AuthenticationResponse> initiate(@RequestBody AuthenticationRequest request) {
         AuthenticationResponse response = authenticationManager.initiateAuthentication(
+            request.getAuthCtxId(),
             request.getSupi(),
             request.getServingNetworkName(),
             request.getAuthType()
@@ -34,14 +35,15 @@ public class AuthenticationController {
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
-    @PostMapping("/{supi}/confirm")
+    @PostMapping("/{authCtxId}/confirm")
     public ResponseEntity<AuthenticationResponse> confirm(
-        @PathVariable("supi") String supi,
+        @PathVariable("authCtxId") String authCtxId,
         @RequestBody AuthenticationRequest request
     ) {
         AuthenticationResponse response = authenticationManager.verifyAuthenticationResponse(
-            supi,
+            authCtxId,
             request.getResStar(),
+            request.getAuts(),
             request.getEapPayload()
         );
         if (!response.getSuccess()) {

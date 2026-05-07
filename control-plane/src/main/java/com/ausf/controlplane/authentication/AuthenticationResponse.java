@@ -2,6 +2,7 @@ package com.ausf.controlplane.authentication;
 
 public class AuthenticationResponse {
     private final boolean success;
+    private final String authCtxId;
     private final String supi;
     private final String authType;
     private final String servingNetworkName;
@@ -15,6 +16,7 @@ public class AuthenticationResponse {
 
     private AuthenticationResponse(
         boolean success,
+        String authCtxId,
         String supi,
         String authType,
         String servingNetworkName,
@@ -27,6 +29,7 @@ public class AuthenticationResponse {
         String errorCode
     ) {
         this.success = success;
+        this.authCtxId = authCtxId;
         this.supi = supi;
         this.authType = authType;
         this.servingNetworkName = servingNetworkName;
@@ -40,6 +43,7 @@ public class AuthenticationResponse {
     }
 
     public static AuthenticationResponse challenge(
+        String authCtxId,
         String supi,
         String authType,
         String servingNetworkName,
@@ -48,19 +52,131 @@ public class AuthenticationResponse {
         String hxresStar,
         String eapChallenge
     ) {
-        return new AuthenticationResponse(true, supi, authType, servingNetworkName, rand, autn, hxresStar, eapChallenge, null, "challenge generated", null);
+        return new AuthenticationResponse(true, authCtxId, supi, authType, servingNetworkName, rand, autn, hxresStar, eapChallenge, null, "challenge generated", null);
     }
 
-    public static AuthenticationResponse success(String supi, String authType, String kseaf) {
-        return new AuthenticationResponse(true, supi, authType, null, null, null, null, null, kseaf, "authentication successful", null);
+    public static AuthenticationResponse resynchronizationChallenge(
+        String authCtxId,
+        String supi,
+        String authType,
+        String servingNetworkName,
+        String rand,
+        String autn,
+        String hxresStar,
+        String eapChallenge
+    ) {
+        return new AuthenticationResponse(
+            true,
+            authCtxId,
+            supi,
+            authType,
+            servingNetworkName,
+            rand,
+            autn,
+            hxresStar,
+            eapChallenge,
+            null,
+            "re-synchronization challenge generated",
+            null
+        );
+    }
+
+    public static AuthenticationResponse reauthenticationChallenge(
+        String authCtxId,
+        String supi,
+        String authType,
+        String servingNetworkName,
+        String rand,
+        String autn,
+        String hxresStar,
+        String eapChallenge
+    ) {
+        return new AuthenticationResponse(
+            true,
+            authCtxId,
+            supi,
+            authType,
+            servingNetworkName,
+            rand,
+            autn,
+            hxresStar,
+            eapChallenge,
+            null,
+            "EAP-AKA' re-authentication challenge generated",
+            null
+        );
+    }
+
+    public static AuthenticationResponse fastReauthenticationChallenge(
+        String authCtxId,
+        String supi,
+        String authType,
+        String servingNetworkName,
+        String rand,
+        String autn,
+        String hxresStar,
+        String eapChallenge
+    ) {
+        return new AuthenticationResponse(
+            true,
+            authCtxId,
+            supi,
+            authType,
+            servingNetworkName,
+            rand,
+            autn,
+            hxresStar,
+            eapChallenge,
+            null,
+            "EAP-AKA' fast re-authentication challenge generated",
+            null
+        );
+    }
+
+    public static AuthenticationResponse synchronizationFailureChallenge(
+        String authCtxId,
+        String supi,
+        String authType,
+        String servingNetworkName,
+        String rand,
+        String autn,
+        String hxresStar,
+        String eapChallenge
+    ) {
+        return new AuthenticationResponse(
+            true,
+            authCtxId,
+            supi,
+            authType,
+            servingNetworkName,
+            rand,
+            autn,
+            hxresStar,
+            eapChallenge,
+            null,
+            "EAP-AKA' synchronization-failure challenge generated",
+            null
+        );
+    }
+
+    public static AuthenticationResponse success(String authCtxId, String supi, String authType, String kseaf) {
+        return new AuthenticationResponse(true, authCtxId, supi, authType, null, null, null, null, null, kseaf, "authentication successful", null);
     }
 
     public static AuthenticationResponse failure(String message, String errorCode) {
-        return new AuthenticationResponse(false, null, null, null, null, null, null, null, null, message, errorCode);
+        return failure(message, errorCode, null);
+    }
+
+    public static AuthenticationResponse failure(String message, String errorCode, String eapChallenge) {
+        return new AuthenticationResponse(false, null, null, null, null, null, null, null, eapChallenge, null, message, errorCode);
     }
 
     public boolean getSuccess() {
         return success;
+    }
+
+    public String getAuthCtxId() {
+        return authCtxId;
     }
 
     public String getSupi() {

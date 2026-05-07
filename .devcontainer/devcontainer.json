@@ -30,7 +30,7 @@
     },
     // CMake + Ninja (for the C++ networking layer)
     "ghcr.io/devcontainers/features/cmake:1": {
-      "version": "latest"
+      "version": "3.25"
     },
     // Docker-in-Docker so `docker compose up` works inside the container
     "ghcr.io/devcontainers/features/docker-in-docker:2": {

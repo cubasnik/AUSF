@@ -5,3 +5,5 @@ target/*
 .idea/
 .vscode/
 *.log
+data/*.mv.db
+data/*.trace.db

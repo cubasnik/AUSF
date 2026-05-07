@@ -1,13 +1,45 @@
 package com.ausf.controlplane.subscriber;
 
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
+
+@Entity
+@Table(name = "subscribers")
+
 public class SubscriberProfile {
+
+    @Id
+    @Column(nullable = false, unique = true)
     private String supi;
+
+    @Column(nullable = false)
     private String authMethod;
+
+    @Enumerated(EnumType.STRING)
+    private AkaAlgorithm akaAlgorithm;
+
+    @Column(nullable = false)
     private String permanentKey;
+
+    @Column(nullable = false)
     private String opc;
+
+    @Column(nullable = false)
     private String servingNetworkName;
+
+    @Column(nullable = false)
     private long sequenceNumber;
+
+    @Column(nullable = false)
     private String routingIndicator;
+
+    public SubscriberProfile() {
+        // JPA requires a no-arg constructor
+    }
 
     public String getSupi() {
         return supi;
@@ -23,6 +55,14 @@ public class SubscriberProfile {
 
     public void setAuthMethod(String authMethod) {
         this.authMethod = authMethod;
+    }
+
+    public AkaAlgorithm getAkaAlgorithm() {
+        return akaAlgorithm;
+    }
+
+    public void setAkaAlgorithm(AkaAlgorithm akaAlgorithm) {
+        this.akaAlgorithm = akaAlgorithm;
     }
 
     public String getPermanentKey() {
