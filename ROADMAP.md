@@ -189,4 +189,38 @@
 
 ## Оставшиеся задачи
 
-Нормативный контракт TS 29.509 закрыт полностью. Все запланированные задачи за его рамками (Горизонты 1–3) выполнены и перенесены в раздел [«Выполненные задачи»](#выполненные-задачи). Открытых пунктов нет.
+Нормативный контракт TS 29.509 закрыт полностью. Задачи ниже — за его рамками: Kubernetes-готовность, наблюдаемость, отказоустойчивость, CI/CD и расширение тестового покрытия.
+
+### Горизонт 4 — Kubernetes production-ready
+
+| # | Задача | Уровень | Описание |
+|---|--------|---------|----------|
+| А | **HPA + PodDisruptionBudget + NetworkPolicy** | Kubernetes / Helm | Helm chart не содержит `HorizontalPodAutoscaler` (CPU/RPS метрики), `PodDisruptionBudget` (минимум 1 pod при rolling upgrade) и `NetworkPolicy` (разрешить только SBI-трафик между сервисами). Без PDB rolling update может уронить сервис; без NetworkPolicy любой pod в namespace получает доступ к AUSF. |
+| Б | **PostgreSQL Bitnami sub-chart + `startupProbe` для control-plane** | Kubernetes / Helm | `values.yaml` не включает зависимость от `bitnami/postgresql` — в production развёртывании БД создаётся вручную. Добавить секцию `postgresql:` с `enabled: true / false` и `externalDatabase:` для bring-your-own. Также: Spring Boot стартует ~30 с; `livenessProbe` с `initialDelaySeconds: 30` убивает pod при медленном JVM — нужен `startupProbe` с `failureThreshold: 15`. |
+
+### Горизонт 5 — Метрики и алерты
+
+| # | Задача | Уровень | Описание |
+|---|--------|---------|----------|
+| В | **Prometheus /metrics + ServiceMonitor** | Go + Java / Kubernetes | Go microservice не экспортирует `/metrics`. Добавить `prometheus/client_golang` с счётчиками: `ausf_auth_initiated_total`, `ausf_auth_success_total`, `ausf_auth_rejected_total`, `ausf_sync_failure_total`, гистограмма `ausf_auth_duration_seconds`. Java control-plane: Micrometer + `micrometer-registry-prometheus` уже есть в Spring Boot Actuator — достаточно включить endpoint и добавить `ServiceMonitor` CR для Prometheus Operator в Helm chart. |
+| Г | **Alertmanager rules** | Kubernetes / Observability | Правила для: истечение сертификата (`ausf_cert_expiry_hours < 168`), переполнение Namf retry queue (ERROR-лог rate > 0), всплеск отказов аутентификации (`ausf_auth_rejected_total` rate), рестарт pod (`kube_pod_container_status_restarts_total`). Поставить как `PrometheusRule` CR в Helm chart. |
+
+### Горизонт 6 — Отказоустойчивость
+
+| # | Задача | Уровень | Описание |
+|---|--------|---------|----------|
+| Д | **TS 29.500 §6.5 NF Overload Control** | Go microservice | Не реализован заголовок `3gpp-Sbi-Overload-Control` в ответах. При перегрузке AUSF должен отвечать `503` с `Retry-After` и `3gpp-Sbi-Max-Rsp-Time`. Добавить middleware: отслеживать in-flight count; при превышении порога (`AUSF_OVERLOAD_THRESHOLD`, по умолч. 500) — shed нагрузку с `503 + Retry-After: 5`. |
+| Е | **Persistent Namf retry queue (Redis Streams)** | Go microservice / Инфраструктура | Текущий `RetryingClient` хранит очередь in-memory — при рестарте pod все накопленные уведомления теряются. Добавить опциональный backend через `AUSF_NAMF_QUEUE_BACKEND=redis` с использованием Redis Streams (`XADD` / `XREADGROUP`); при `backend=memory` — текущее поведение без изменений. |
+
+### Горизонт 7 — CI/CD и безопасность образов
+
+| # | Задача | Уровень | Описание |
+|---|--------|---------|----------|
+| Ж | **Docker build + push + Helm lint workflow** | GitHub Actions | Существует только `regression-suite.yml`. Добавить workflow `release.yml`: при push тега `v*.*.*` — `docker buildx build` + `docker push` для Go и Java образов в GHCR, затем `helm lint` + `helm template` + `helm package` + publish chart в GitHub Pages (`gh-pages` ветка). |
+| З | **Trivy container image scan** | GitHub Actions / Security | Добавить job в CI: `aquasecurity/trivy-action` сканирует собранные образы на CVE; при `CRITICAL` — fail build. Отдельный `scheduled` workflow еженедельно сканирует опубликованные образы в GHCR на новые уязвимости. |
+
+### Горизонт 8 — Расширение тестового покрытия
+
+| # | Задача | Уровень | Описание |
+|---|--------|---------|----------|
+| И | **Smoke-тесты: retry queue + SIGHUP + Flyway** | Automation (Python) | Три новых сценария: (1) `smoke_test_namf_retry_queue.py` — поднять compose без AMF, инициировать аутентификацию, убедиться что retry queue наполняется, поднять AMF, дождаться drain и проверить лог SUCCESS; (2) `smoke_test_sighup_cert_reload.py` — отправить `SIGHUP` контейнеру, убедиться что TLS продолжает работать с тем же сертификатом; (3) `smoke_test_flyway_migration.py` — поднять контейнер с чистой PostgreSQL, убедиться что `V1__initial_schema.sql` применился и сервис прошёл readiness probe. |
