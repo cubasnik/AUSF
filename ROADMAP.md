@@ -192,6 +192,7 @@
 | 25 | ~~Persistent Namf retry queue — Redis Streams backend (`AUSF_NAMF_QUEUE_BACKEND=redis`, `XADD`/`XREADGROUP`)~~ ✅ | — | Go microservice / Kubernetes |
 | 26 | ~~`release.yml` workflow: `docker buildx build` + push Go & Java images to GHCR + Trivy CVE scan + `helm lint` + `helm package` + publish to `gh-pages`~~ ✅ | — | GitHub Actions |
 | 27 | ~~`trivy-scheduled-scan.yml`: weekly scheduled scan of published GHCR images; CRITICAL → fail; uploads SARIF to Security tab~~ ✅ | — | GitHub Actions / Security |
+| 28 | ~~Smoke-тесты Горизонта 8: retry queue drain (`smoke_test_namf_retry_queue.py`), SIGHUP TLS cert-reload (`smoke_test_sighup_cert_reload.py`), Flyway V1 migration (`smoke_test_flyway_migration.py`)~~ ✅ | — | Automation (Python) |
 
 ---
 
@@ -217,6 +218,4 @@
 
 ### Горизонт 8 — Расширение тестового покрытия
 
-| # | Задача | Уровень | Описание |
-|---|--------|---------|----------|
-| И | **Smoke-тесты: retry queue + SIGHUP + Flyway** | Automation (Python) | Три новых сценария: (1) `smoke_test_namf_retry_queue.py` — поднять compose без AMF, инициировать аутентификацию, убедиться что retry queue наполняется, поднять AMF, дождаться drain и проверить лог SUCCESS; (2) `smoke_test_sighup_cert_reload.py` — отправить `SIGHUP` контейнеру, убедиться что TLS продолжает работать с тем же сертификатом; (3) `smoke_test_flyway_migration.py` — поднять контейнер с чистой PostgreSQL, убедиться что `V1__initial_schema.sql` применился и сервис прошёл readiness probe. |
+Все задачи горизонта выполнены — см. «Выполненные задачи» #28.

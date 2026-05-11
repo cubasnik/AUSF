@@ -81,6 +81,8 @@ SMOKE_SCRIPTS = HAPPY_PATH_SCRIPTS + NEGATIVE_SCRIPTS
 HOST_LEVEL_SCRIPTS = [
     "automation/scripts/smoke_test_http_udm_context_survives_restart.py",
     "automation/scripts/smoke_test_http_udm_context_ttl_expired.py",
+    # Горизонт 8: retry-queue drain, SIGHUP cert-reload, Flyway migration
+    "automation/scripts/smoke_test_namf_retry_queue.py",
 ]
 RESET_SERVICES_AFTER_SCRIPT = {
     "automation/scripts/smoke_test_http_udm_upstream_unavailable.py": ["ausf-control-plane"],

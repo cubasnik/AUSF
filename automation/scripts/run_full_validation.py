@@ -197,6 +197,16 @@ def main() -> int:
         https_smoke_command,
     )
 
+    run_python_step(
+        "SIGHUP TLS certificate hot-reload smoke test",
+        [PYTHON, "automation/scripts/smoke_test_sighup_cert_reload.py"],
+    )
+
+    run_python_step(
+        "Flyway V1 schema migration smoke test",
+        [PYTHON, "automation/scripts/smoke_test_flyway_migration.py"],
+    )
+
     print("==> full validation completed", flush=True)
     return 0
 
