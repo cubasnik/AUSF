@@ -11,6 +11,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -41,6 +42,7 @@ public class AuthenticationManager {
     private final UdmClient udmClient;
     private final SuciDeconcealer suciDeconcealer;
 
+    @Autowired
     public AuthenticationManager(CryptographyService cryptographyService, UdmClient udmClient) {
         this(cryptographyService, udmClient, new SuciDeconcealer("", ""));
     }
