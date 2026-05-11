@@ -169,6 +169,20 @@ func main() {
 				logMain("INFO", "TLS certificate cache invalidated via SIGHUP", map[string]any{})
 			}
 		}()
+		// Periodically update the cert expiry gauge so Alertmanager can fire
+		// an alert when expiry < 168 h (7 days).
+		go func() {
+			tick := time.NewTicker(time.Hour)
+			defer tick.Stop()
+			for {
+				if cert, err := serverCertLoader.Get(); err == nil {
+					if cert.Leaf != nil {
+						reg.SetCertExpiryHours(time.Until(cert.Leaf.NotAfter).Hours())
+					}
+				}
+				<-tick.C
+			}
+		}()
 	}
 
 	logMain("INFO", "AUSF microservice starting", map[string]any{

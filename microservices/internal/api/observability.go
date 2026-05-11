@@ -13,6 +13,7 @@ import (
 
 	"github.com/alexey/ausf/microservices/internal/metrics"
 	"github.com/alexey/ausf/microservices/internal/tracing"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 type traceIDKeyType string
@@ -96,9 +97,8 @@ func withObservability(next http.Handler) http.Handler {
 	})
 }
 
-func (handler Handler) metrics(writer http.ResponseWriter, _ *http.Request) {
-	writer.Header().Set("Content-Type", "text/plain; version=0.0.4")
-	_, _ = writer.Write([]byte(defaultRegistry.PrometheusText()))
+func (handler Handler) metrics(writer http.ResponseWriter, request *http.Request) {
+	promhttp.HandlerFor(defaultRegistry.Gatherer(), promhttp.HandlerOpts{}).ServeHTTP(writer, request)
 }
 
 func logJSON(fields map[string]any) {

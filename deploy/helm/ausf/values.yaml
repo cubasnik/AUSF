@@ -169,6 +169,29 @@ externalDatabase:
   existingSecretKey: password
 
 # ──────────────────────────────────────────────────────────────────────────────
+# Prometheus Operator integration
+# ServiceMonitor and PrometheusRule are only rendered when enabled.
+# ──────────────────────────────────────────────────────────────────────────────
+serviceMonitor:
+  # Set true when the Prometheus Operator CRD is installed in the cluster.
+  enabled: false
+  # Scrape interval (Prometheus Operator default is 30s).
+  interval: 30s
+  # Scrape timeout — must be ≤ interval.
+  scrapeTimeout: 10s
+  # Labels added to the ServiceMonitor so Prometheus picks it up.
+  # Match the labelSelector in your Prometheus CR's serviceMonitorSelector.
+  additionalLabels: {}
+
+prometheusRule:
+  # Set true when the Prometheus Operator CRD is installed in the cluster.
+  enabled: false
+  # Namespace for the PrometheusRule CR.  Defaults to .Values.namespace.
+  namespace: ""
+  # Extra labels on the PrometheusRule (must match Prometheus CR ruleSelector).
+  additionalLabels: {}
+
+# ──────────────────────────────────────────────────────────────────────────────
 # Mock network functions (disable in production)
 # ──────────────────────────────────────────────────────────────────────────────
 mocks:

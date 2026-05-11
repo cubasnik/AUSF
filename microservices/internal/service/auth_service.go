@@ -82,12 +82,14 @@ type AuthService struct {
 }
 
 // authMetricsRecorder is a local interface so the service package does not
-// need to import the metrics package — any value satisfying these three
-// methods (including *metrics.Registry) will work.
+// need to import the metrics package — any value satisfying these methods
+// (including *metrics.Registry) will work.
 type authMetricsRecorder interface {
 	RecordAuthInitiated(authType string)
 	RecordAuthConfirmed(authType string)
 	RecordAuthFailed(cause string)
+	RecordSyncFailure(authType string)
+	RecordAuthDuration(authType string, durationSeconds float64)
 }
 
 type controlPlaneAPI interface {
@@ -145,6 +147,7 @@ func (service *AuthService) CreateUEAuthentication(ctx context.Context, supi str
 		return AuthContext{}, contextStoreError("auth context allocation failed", err)
 	}
 
+	initiateStart := time.Now()
 	response, err := service.controlPlaneClient.Initiate(ctx, controlplane.AuthenticationRequest{
 		AuthCtxID:          authCtxID,
 		SUPI:               supi,
@@ -176,6 +179,7 @@ func (service *AuthService) CreateUEAuthentication(ctx context.Context, supi str
 	}
 	if service.recorder != nil {
 		service.recorder.RecordAuthInitiated(context.AuthType)
+		service.recorder.RecordAuthDuration(context.AuthType, time.Since(initiateStart).Seconds())
 	}
 	return context, nil
 }
@@ -198,6 +202,7 @@ func (service *AuthService) Confirm(ctx context.Context, authCtxID string, resSt
 		return ConfirmationResult{}, invalidAutsForAuthTypeError()
 	}
 
+	confirmStart := time.Now()
 	response, err := service.controlPlaneClient.Confirm(ctx, authCtxID, controlplane.AuthenticationRequest{
 		ResStar:    resStar,
 		AUTS:       auts,
@@ -251,6 +256,9 @@ func (service *AuthService) Confirm(ctx context.Context, authCtxID string, resSt
 			return ConfirmationResult{}, contextStoreError("auth context update failed", err)
 		}
 
+		if service.recorder != nil {
+			service.recorder.RecordSyncFailure(context.AuthType)
+		}
 		return ConfirmationResult{
 			AuthCtxID:  authCtxID,
 			SUPI:       context.SUPI,
@@ -301,6 +309,7 @@ func (service *AuthService) Confirm(ctx context.Context, authCtxID string, resSt
 	}
 	if service.recorder != nil {
 		service.recorder.RecordAuthConfirmed(context.AuthType)
+		service.recorder.RecordAuthDuration(context.AuthType, time.Since(confirmStart).Seconds())
 	}
 
 	return ConfirmationResult{

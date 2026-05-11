@@ -186,6 +186,8 @@
 | 19 | ~~Ротация сертификатов — SIGHUP + expiry warning~~ ✅ | RFC 8446 | Go microservice |
 | 20 | ~~HPA + PodDisruptionBudget + NetworkPolicy (Helm chart)~~ ✅ | — | Kubernetes / Helm |
 | 21 | ~~PostgreSQL Bitnami sub-chart + `startupProbe` для control-plane~~ ✅ | — | Kubernetes / Helm |
+| 22 | ~~Prometheus `/metrics` + ServiceMonitor (Go `prometheus/client_golang` + Java Micrometer)~~ ✅ | — | Go + Java + Kubernetes / Helm |
+| 23 | ~~Alertmanager rules `PrometheusRule` CR (cert expiry, auth rejection spike, pod restart)~~ ✅ | — | Kubernetes / Helm |
 
 ---
 
@@ -199,10 +201,7 @@
 
 ### Горизонт 5 — Метрики и алерты
 
-| # | Задача | Уровень | Описание |
-|---|--------|---------|----------|
-| В | **Prometheus /metrics + ServiceMonitor** | Go + Java / Kubernetes | Go microservice не экспортирует `/metrics`. Добавить `prometheus/client_golang` с счётчиками: `ausf_auth_initiated_total`, `ausf_auth_success_total`, `ausf_auth_rejected_total`, `ausf_sync_failure_total`, гистограмма `ausf_auth_duration_seconds`. Java control-plane: Micrometer + `micrometer-registry-prometheus` уже есть в Spring Boot Actuator — достаточно включить endpoint и добавить `ServiceMonitor` CR для Prometheus Operator в Helm chart. |
-| Г | **Alertmanager rules** | Kubernetes / Observability | Правила для: истечение сертификата (`ausf_cert_expiry_hours < 168`), переполнение Namf retry queue (ERROR-лог rate > 0), всплеск отказов аутентификации (`ausf_auth_rejected_total` rate), рестарт pod (`kube_pod_container_status_restarts_total`). Поставить как `PrometheusRule` CR в Helm chart. |
+Все задачи горизонта выполнены — см. «Выполненные задачи» #22–23.
 
 ### Горизонт 6 — Отказоустойчивость
 
