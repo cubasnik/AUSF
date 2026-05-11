@@ -1,4 +1,4 @@
-FROM golang:1.24-bookworm AS builder
+FROM golang:1.26-bookworm AS builder
 
 WORKDIR /app
 
@@ -10,7 +10,7 @@ COPY internal ./internal
 
 RUN go build -o /out/ausf ./cmd/ausf
 
-FROM golang:1.24-bookworm
+FROM golang:1.26-bookworm
 
 WORKDIR /app
 
