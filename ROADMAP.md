@@ -190,6 +190,8 @@
 | 23 | ~~Alertmanager rules `PrometheusRule` CR (cert expiry, auth rejection spike, pod restart)~~ ✅ | — | Kubernetes / Helm |
 | 24 | ~~TS 29.500 §6.5 NF Overload Control — `withOverloadControl` middleware (`AUSF_OVERLOAD_THRESHOLD`)~~ ✅ | — | Go microservice |
 | 25 | ~~Persistent Namf retry queue — Redis Streams backend (`AUSF_NAMF_QUEUE_BACKEND=redis`, `XADD`/`XREADGROUP`)~~ ✅ | — | Go microservice / Kubernetes |
+| 26 | ~~`release.yml` workflow: `docker buildx build` + push Go & Java images to GHCR + Trivy CVE scan + `helm lint` + `helm package` + publish to `gh-pages`~~ ✅ | — | GitHub Actions |
+| 27 | ~~`trivy-scheduled-scan.yml`: weekly scheduled scan of published GHCR images; CRITICAL → fail; uploads SARIF to Security tab~~ ✅ | — | GitHub Actions / Security |
 
 ---
 
@@ -211,10 +213,7 @@
 
 ### Горизонт 7 — CI/CD и безопасность образов
 
-| # | Задача | Уровень | Описание |
-|---|--------|---------|----------|
-| Ж | **Docker build + push + Helm lint workflow** | GitHub Actions | Существует только `regression-suite.yml`. Добавить workflow `release.yml`: при push тега `v*.*.*` — `docker buildx build` + `docker push` для Go и Java образов в GHCR, затем `helm lint` + `helm template` + `helm package` + publish chart в GitHub Pages (`gh-pages` ветка). |
-| З | **Trivy container image scan** | GitHub Actions / Security | Добавить job в CI: `aquasecurity/trivy-action` сканирует собранные образы на CVE; при `CRITICAL` — fail build. Отдельный `scheduled` workflow еженедельно сканирует опубликованные образы в GHCR на новые уязвимости. |
+Все задачи горизонта выполнены — см. «Выполненные задачи» #26–27.
 
 ### Горизонт 8 — Расширение тестового покрытия
 
