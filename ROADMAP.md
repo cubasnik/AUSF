@@ -178,12 +178,12 @@
 | 11 | ~~PFCP data-plane: полное бинарное кадрирование, UDP-сокет, PDR/FAR/URR/QER, GTP-U, DataPlane FORW/DROP/BUFF, QER gate, periodic usage-report, MTU — 62 теста / 302 утверждения~~ ✅ | TS 29.244 / TS 29.281 | C++ networking |
 | 12 | ~~TS 29.509 OAS3 optional fields (SoRInfo: `sorHeader`, `storageIndicator`, `provisioning3gppInd`; UPUInfo: `upuHeader`, `provisioning3gppInd`) — приняты, проброшены в crypto, MAC-divergence верифицирован smoke-тестами~~ ✅ | TS 29.509 §6.2/§6.3 | Go + Java |
 | 13 | ~~Нагрузочное и soak-тестирование с реалистичными SUPI-популяциями~~ ✅ (`automation/scripts/run_load_test.py`: N воркеров, linear ramp, load + soak фазы, p50/p95/p99, throughput, error breakdown, JSON-отчёт, threshold exit-code) | — | Automation |
-| 14 | ~~**Полный конечный автомат 5G AKA по TS 33.501 (FSM-лимиты)**~~ ✅ — `syncFailureCount` в `AuthenticationContext`, `maxSyncFailures` в `AuthenticationManager` (`ausf.auth.maxSyncFailures` / `AUSF_AUTH_MAX_SYNC_FAILURES`; 0 = без лимита); превышение → `AUTHENTICATION_REJECTED` «max SYNC_FAILURE attempts exceeded»; тест `shouldRejectFiveGAkaSyncFailureWhenMaxAttemptsExceeded` | TS 33.501 §6.1.3 | Go + Java |
-| 15 | ~~**Полный конечный автомат EAP-AKA' по TS 33.501 (FSM-лимиты)**~~ ✅ — `eapOngoingCount` в `AuthenticationContext`, `maxEapOngoing` в `AuthenticationManager` (`ausf.auth.maxEapOngoing` / `AUSF_AUTH_MAX_EAP_ONGOING`; 0 = без лимита); превышение → `AUTHENTICATION_REJECTED` + EAP-Failure payload; тест `shouldRejectEapAkaPrimeOngoingWhenMaxRoundTripsExceeded` | TS 33.501 §6.1.3 | Go + Java |
-| 16 | ~~**Распределённая трассировка OpenTelemetry (полная)**~~ ✅ — `micrometer-tracing-bridge-otel` + `opentelemetry-exporter-otlp` в Java control-plane; W3C `traceparent` сквозной из Go; `@Observed` на `initiateAuthentication` / `verifyAuthenticationResponse`; OTLP/HTTP → `AUSF_OTEL_ENDPOINT`; trace-id/span-id в MDC JSON-логах | W3C TraceContext / OTLP | Go + Java |
-| 17 | ~~**PostgreSQL production hardening — Flyway migrations**~~ ✅ — `flyway-core` + `flyway-database-postgresql` в `pom.xml`; `V1__initial_schema.sql` создаёт таблицу `subscribers`; `ddl-auto` → `validate`; `AUSF_FLYWAY_BASELINE_ON_MIGRATE` (default `true`) для zero-downtime перехода | — | Java control-plane |
-| 18 | ~~**Production Namf_Communication — async retry queue**~~ ✅ — `namf.RetryingClient` (`retry_queue.go`): in-memory очередь 512 слотов поверх `*Client`; backoff 5 s→10 s→…→5 min; `AUSF_NAMF_QUEUE_MAX_ATTEMPTS` (default 10); `Start()` / `Stop()` в `main.go` | TS 29.518 | Go microservice |
-| 19 | ~~**Ротация сертификатов — SIGHUP + expiry warning**~~ ✅ — `CertLoader.ForceReload()` сбрасывает TTL-кеш для немедленной перезагрузки; `warnIfExpiringSoon()` пишет JSON WARN в stderr при `NotAfter < 7 дней`; SIGHUP-хендлер в `main.go` (`signal.Notify(sighupCh, syscall.SIGHUP)` → `ForceReload()`) | RFC 8446 | Go microservice |
+| 14 | ~~Полный конечный автомат 5G AKA по TS 33.501 (FSM-лимиты)~~ ✅ | TS 33.501 §6.1.3 | Go + Java |
+| 15 | ~~Полный конечный автомат EAP-AKA' по TS 33.501 (FSM-лимиты)~~ ✅ | TS 33.501 §6.1.3 | Go + Java |
+| 16 | ~~Распределённая трассировка OpenTelemetry (полная)~~ ✅ | W3C TraceContext / OTLP | Go + Java |
+| 17 | ~~PostgreSQL production hardening — Flyway migrations~~ ✅ | — | Java control-plane |
+| 18 | ~~Production Namf_Communication — async retry queue~~ ✅ | TS 29.518 | Go microservice |
+| 19 | ~~Ротация сертификатов — SIGHUP + expiry warning~~ ✅ | RFC 8446 | Go microservice |
 
 ---
 
