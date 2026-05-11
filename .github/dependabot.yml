@@ -1,0 +1,42 @@
+version: 2
+
+updates:
+  # Go modules — microservices
+  - package-ecosystem: gomod
+    directory: /microservices
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    labels: [dependencies, go]
+
+  # Maven — Java control-plane
+  - package-ecosystem: maven
+    directory: /control-plane
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    labels: [dependencies, java]
+
+  # Docker base images — Go microservice
+  - package-ecosystem: docker
+    directory: /microservices
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels: [dependencies, docker]
+
+  # Docker base images — Java control-plane
+  - package-ecosystem: docker
+    directory: /control-plane
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels: [dependencies, docker]
+
+  # GitHub Actions
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    labels: [dependencies, github-actions]

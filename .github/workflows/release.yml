@@ -170,12 +170,55 @@ jobs:
           category: trivy-control-plane
 
   # ─────────────────────────────────────────────────────────────
-  # 4. Helm lint + template smoke + package + publish to gh-pages
+  # 4. SBOM generation — CycloneDX JSON via Syft, attached to release
+  # ─────────────────────────────────────────────────────────────
+  sbom:
+    name: Generate SBOM (CycloneDX JSON)
+    runs-on: ubuntu-latest
+    needs: [build-microservice, build-control-plane]
+    permissions:
+      contents: write   # upload files to GitHub release
+      packages: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate SBOM — microservice
+        uses: anchore/syft-action@v1
+        with:
+          image: ${{ env.MICROSERVICE_IMAGE }}:${{ github.ref_name }}
+          output-file: sbom-microservice.cdx.json
+          format: cyclonedx-json
+
+      - name: Generate SBOM — control-plane
+        uses: anchore/syft-action@v1
+        with:
+          image: ${{ env.CONTROL_PLANE_IMAGE }}:${{ github.ref_name }}
+          output-file: sbom-control-plane.cdx.json
+          format: cyclonedx-json
+
+      - name: Attach SBOMs to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            sbom-microservice.cdx.json
+            sbom-control-plane.cdx.json
+
+  # ─────────────────────────────────────────────────────────────
+  # 5. Helm lint + template smoke + package + publish to gh-pages
   # ─────────────────────────────────────────────────────────────
   helm-publish:
     name: Helm lint, package & publish
     runs-on: ubuntu-latest
-    needs: [trivy-scan-release]
+    needs: [trivy-scan-release, sbom]
     permissions:
       contents: write   # push to gh-pages
 

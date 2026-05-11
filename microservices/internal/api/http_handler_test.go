@@ -198,8 +198,8 @@ func TestCreateUEAuthenticationShouldRejectMalformedJSON(t *testing.T) {
 	if problem.Cause != "MALFORMED_REQUEST" {
 		t.Fatalf("cause = %s, want MALFORMED_REQUEST", problem.Cause)
 	}
-	if problem.Detail != "request body is invalid" {
-		t.Fatalf("detail = %s, want request body is invalid", problem.Detail)
+	if problem.Detail != "request body must be valid JSON" {
+		t.Fatalf("detail = %s, want request body must be valid JSON", problem.Detail)
 	}
 }
 
@@ -229,11 +229,8 @@ func TestCreateUEAuthenticationShouldRejectUnsupportedAuthType(t *testing.T) {
 	if err := json.Unmarshal(response.Body.Bytes(), &problem); err != nil {
 		t.Fatalf("Unmarshal() error = %v", err)
 	}
-	if problem.Cause != "UNSUPPORTED_AUTH_TYPE" {
-		t.Fatalf("cause = %s, want UNSUPPORTED_AUTH_TYPE", problem.Cause)
-	}
-	if problem.Detail != "authType must be 5G_AKA or EAP_AKA_PRIME when provided" {
-		t.Fatalf("detail = %s, want authType must be 5G_AKA or EAP_AKA_PRIME when provided", problem.Detail)
+	if problem.Cause != "SCHEMA_VALIDATION_FAILED" {
+		t.Fatalf("cause = %s, want SCHEMA_VALIDATION_FAILED", problem.Cause)
 	}
 }
 

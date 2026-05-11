@@ -193,6 +193,9 @@
 | 26 | ~~`release.yml` workflow: `docker buildx build` + push Go & Java images to GHCR + Trivy CVE scan + `helm lint` + `helm package` + publish to `gh-pages`~~ ✅ | — | GitHub Actions |
 | 27 | ~~`trivy-scheduled-scan.yml`: weekly scheduled scan of published GHCR images; CRITICAL → fail; uploads SARIF to Security tab~~ ✅ | — | GitHub Actions / Security |
 | 28 | ~~Smoke-тесты Горизонта 8: retry queue drain (`smoke_test_namf_retry_queue.py`), SIGHUP TLS cert-reload (`smoke_test_sighup_cert_reload.py`), Flyway V1 migration (`smoke_test_flyway_migration.py`)~~ ✅ | — | Automation (Python) |
+| 29 | ~~SBOM: `anchore/syft-action` CycloneDX JSON для обоих образов в `release.yml`; артефакты прикреплены к релизу; `dependency-review-action` в `dependency-review.yml` блокирует PR с CRITICAL CVE~~ ✅ | — | GitHub Actions |
+| 30 | ~~Dependabot: `.github/dependabot.yml` — еженедельные PR на обновление Go modules, Maven, Docker base-images, GitHub Actions~~ ✅ | — | GitHub / DevEx |
+| 31 | ~~OpenAPI request validation middleware: `withRequestValidation` — `//go:embed schema/nausf-auth-v1.yaml`; required-field + type + enum проверка; `400 ProblemDetails{invalidParams}` per TS 29.500 §6.6.4; 5 тестов~~ ✅ | — | Go microservice |
 
 ---
 
@@ -219,3 +222,15 @@
 ### Горизонт 8 — Расширение тестового покрытия
 
 Все задачи горизонта выполнены — см. «Выполненные задачи» #28.
+
+### Горизонт 9 — Supply chain security + DevEx
+
+Все задачи горизонта выполнены — см. «Выполненные задачи» #29–31.
+
+### Горизонт 10 — Chaos & resilience smoke tests
+
+| # | Задача | Уровень | Описание |
+|---|--------|---------|----------|
+| Н | **`smoke_test_chaos_control_plane_down.py`** | Automation (Python) | Kill control-plane mid-auth → circuit breaker открывается, AUSF возвращает 503 → перезапуск control-plane → half-open → следующий auth проходит |
+| О | **`smoke_test_redis_failover.py`** | Automation (Python) | Redis-queue-mode: stop Redis → confirm auth → AUSF переходит на in-memory fallback (нет паники, лог warning) → start Redis → drain очереди |
+| П | **`smoke_test_concurrent_auth.py`** | Automation (Python) | 20 параллельных `threading.Thread`, по одному SUPI каждый → initiate+confirm → все `authResult=SUCCESS`, без data-race и без перепутанных `xresStar` |

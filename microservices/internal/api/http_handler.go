@@ -53,7 +53,7 @@ func (handler Handler) Routes() http.Handler {
 	mux.HandleFunc("/metrics", handler.metrics)
 	mux.HandleFunc("/nausf-auth/v1/ue-authentications", handler.createUEAuthentication)
 	mux.HandleFunc("/nausf-auth/v1/ue-authentications/", handler.authContextRoutes)
-	return withObservability(withOverloadControl(withAuthorization(mux, handler.authorization), handler.overloadThreshold))
+	return withObservability(withOverloadControl(withAuthorization(withRequestValidation(mux), handler.authorization), handler.overloadThreshold))
 }
 
 func (handler Handler) health(writer http.ResponseWriter, _ *http.Request) {

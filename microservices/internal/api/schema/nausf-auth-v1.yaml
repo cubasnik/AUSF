@@ -1,0 +1,62 @@
+# Nausf_UEAuthentication request-body validation rules.
+# Embedded into the Go binary via //go:embed; consumed by the withRequestValidation
+# middleware in validation.go.
+#
+# Source: TS 29.509 §6.1 (UEAuthentication), §6.2 (SoRProtection), §6.3 (UPUProtection).
+#
+# Rule fields:
+#   method      — HTTP method (POST or PUT)
+#   path        — exact URL path match (takes priority over path_suffix)
+#   path_suffix — suffix match for parameterised paths (e.g. /{authCtxId}/5g-aka-confirmation)
+#   required    — fields that must be present and non-blank in the JSON body
+#   properties  — per-field type and optional enum constraints; absent fields are allowed
+#
+# Supported property types: string, boolean, integer, number
+
+routes:
+  # POST /nausf-auth/v1/ue-authentications — create UE authentication context
+  - method: POST
+    path: /nausf-auth/v1/ue-authentications
+    required: [supiOrSuci, servingNetworkName]
+    properties:
+      supiOrSuci:         {type: string}
+      servingNetworkName: {type: string}
+      authType:           {type: string, enum: [5G_AKA, EAP_AKA_PRIME]}
+      notificationUri:    {type: string}
+
+  # POST …/{authCtxId}/5g-aka-confirmation — confirm 5G-AKA
+  - method: POST
+    path_suffix: /5g-aka-confirmation
+    properties:
+      resStar:    {type: string}
+      auts:       {type: string}
+      eapPayload: {type: string}
+
+  # POST …/{authCtxId}/eap-session — EAP-AKA' session step
+  - method: POST
+    path_suffix: /eap-session
+    properties:
+      resStar:    {type: string}
+      auts:       {type: string}
+      eapPayload: {type: string}
+
+  # PUT …/{authCtxId}/sor-protection — Steering of Roaming protection (TS 29.509 §6.2)
+  - method: PUT
+    path_suffix: /sor-protection
+    required: [steeringContainer]
+    properties:
+      steeringContainer:   {type: string}
+      ackIndication:       {type: boolean}
+      sorHeader:           {type: string}
+      storageIndicator:    {type: string}
+      provisioning3gppInd: {type: boolean}
+
+  # PUT …/{authCtxId}/upu-protection — UE Parameters Update protection (TS 29.509 §6.3)
+  - method: PUT
+    path_suffix: /upu-protection
+    required: [upuData]
+    properties:
+      upuData:             {type: string}
+      ackIndication:       {type: boolean}
+      upuHeader:           {type: string}
+      provisioning3gppInd: {type: boolean}
