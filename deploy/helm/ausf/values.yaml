@@ -40,6 +40,8 @@ microservice:
     AUSF_CONTROL_PLANE_BREAKER_TIMEOUT_SECONDS: "10"
     # Set to e.g. http://otel-collector:4318 to enable OTLP/HTTP tracing export
     AUSF_OTLP_ENDPOINT: ""
+    # NF Overload Control threshold (TS 29.500 §6.5). 0 → built-in default 500.
+    AUSF_OVERLOAD_THRESHOLD: "500"
 
   # Reference to a pre-existing Secret whose keys are merged into env.
   # Leave empty to skip.
@@ -167,6 +169,42 @@ externalDatabase:
   # Name of a pre-existing Secret with a key holding the database password.
   existingSecret: ""
   existingSecretKey: password
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Namf async retry queue
+# ──────────────────────────────────────────────────────────────────────────────
+namfQueue:
+  # backend: "memory" — default, stateless in-memory retry queue
+  # backend: "redis"  — persistent Redis Streams queue; requires redis.enabled=true
+  #                      or a pre-existing Redis at namfQueue.redisURL.
+  backend: memory
+
+  # Redis connection URL used when backend=redis and redis.enabled=false.
+  # When redis.enabled=true the URL is derived automatically from the bundled Redis.
+  # Example: redis://:password@redis-host:6379/0
+  redisURL: ""
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Redis (Bitnami sub-chart) — disabled by default
+# Enable alongside namfQueue.backend=redis to get a durable retry queue.
+# ──────────────────────────────────────────────────────────────────────────────
+redis:
+  enabled: false
+  architecture: standalone
+  auth:
+    # Set enabled=true and provide a password for production deployments.
+    enabled: false
+  master:
+    persistence:
+      enabled: true
+      size: 1Gi
+    resources:
+      requests:
+        cpu: "50m"
+        memory: "64Mi"
+      limits:
+        cpu: "200m"
+        memory: "128Mi"
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Prometheus Operator integration

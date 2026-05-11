@@ -28,11 +28,26 @@ const (
 
 // retryItem holds a notification that could not be delivered synchronously.
 type retryItem struct {
+	// streamID is the Redis Stream entry ID used for XACK after processing.
+	// Empty when using the in-memory backend.
+	streamID     string
 	notification UEAuthenticationStatusNotification
 	notifyURI    string
 	attempt      int
 	retryAfter   time.Time
 }
+
+// Notifier is satisfied by both RetryingClient (in-memory queue) and
+// RedisRetryingClient (Redis Streams queue) and is the interface consumed by
+// the service layer via service.namfNotifier.
+type Notifier interface {
+	NotifyUEAuthenticationStatus(UEAuthenticationStatusNotification, string) error
+	Start()
+	Stop()
+}
+
+// Compile-time assertion that *RetryingClient implements Notifier.
+var _ Notifier = (*RetryingClient)(nil)
 
 // RetryingClient wraps a *Client and adds an in-memory async retry queue so
 // that Namf_Communication notifications that exhaust all synchronous delivery

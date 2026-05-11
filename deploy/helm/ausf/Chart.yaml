@@ -22,3 +22,10 @@ dependencies:
     version: "^16.0.0"
     repository: "https://charts.bitnami.com/bitnami"
     condition: postgresql.enabled
+
+  # Bitnami Redis — disabled by default; enable together with
+  # namfQueue.backend=redis to activate the persistent Namf retry queue.
+  - name: redis
+    version: "^20.0.0"
+    repository: "https://charts.bitnami.com/bitnami"
+    condition: redis.enabled

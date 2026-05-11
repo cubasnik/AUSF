@@ -188,6 +188,8 @@
 | 21 | ~~PostgreSQL Bitnami sub-chart + `startupProbe` для control-plane~~ ✅ | — | Kubernetes / Helm |
 | 22 | ~~Prometheus `/metrics` + ServiceMonitor (Go `prometheus/client_golang` + Java Micrometer)~~ ✅ | — | Go + Java + Kubernetes / Helm |
 | 23 | ~~Alertmanager rules `PrometheusRule` CR (cert expiry, auth rejection spike, pod restart)~~ ✅ | — | Kubernetes / Helm |
+| 24 | ~~TS 29.500 §6.5 NF Overload Control — `withOverloadControl` middleware (`AUSF_OVERLOAD_THRESHOLD`)~~ ✅ | — | Go microservice |
+| 25 | ~~Persistent Namf retry queue — Redis Streams backend (`AUSF_NAMF_QUEUE_BACKEND=redis`, `XADD`/`XREADGROUP`)~~ ✅ | — | Go microservice / Kubernetes |
 
 ---
 
@@ -205,10 +207,7 @@
 
 ### Горизонт 6 — Отказоустойчивость
 
-| # | Задача | Уровень | Описание |
-|---|--------|---------|----------|
-| Д | **TS 29.500 §6.5 NF Overload Control** | Go microservice | Не реализован заголовок `3gpp-Sbi-Overload-Control` в ответах. При перегрузке AUSF должен отвечать `503` с `Retry-After` и `3gpp-Sbi-Max-Rsp-Time`. Добавить middleware: отслеживать in-flight count; при превышении порога (`AUSF_OVERLOAD_THRESHOLD`, по умолч. 500) — shed нагрузку с `503 + Retry-After: 5`. |
-| Е | **Persistent Namf retry queue (Redis Streams)** | Go microservice / Инфраструктура | Текущий `RetryingClient` хранит очередь in-memory — при рестарте pod все накопленные уведомления теряются. Добавить опциональный backend через `AUSF_NAMF_QUEUE_BACKEND=redis` с использованием Redis Streams (`XADD` / `XREADGROUP`); при `backend=memory` — текущее поведение без изменений. |
+Все задачи горизонта выполнены — см. «Выполненные задачи» #24–25.
 
 ### Горизонт 7 — CI/CD и безопасность образов
 

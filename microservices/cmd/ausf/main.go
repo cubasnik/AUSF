@@ -82,14 +82,25 @@ func main() {
 
 	// Wrap the Namf client with an async retry queue so that notifications that
 	// exhaust synchronous retries are retried in the background with exponential
-	// backoff (AUSF_NAMF_QUEUE_MAX_ATTEMPTS async attempts, default 10).
-	retryingNamf := namf.NewRetryingClient(namfClient, appConfig.NamfQueueMaxAttempts)
-	retryingNamf.Start()
-	defer retryingNamf.Stop()
+	// backoff.  When AUSF_NAMF_QUEUE_BACKEND=redis, a Redis Streams-backed queue
+	// is used to survive pod restarts; otherwise the default in-memory queue is used.
+	var retryQueue namf.Notifier
+	if appConfig.NamfQueueBackend == "redis" && appConfig.NamfRedisURL != "" {
+		rq, rqErr := namf.NewRedisRetryingClient(namfClient, appConfig.NamfQueueMaxAttempts, appConfig.NamfRedisURL)
+		if rqErr != nil {
+			logMain("FATAL", "failed to initialize Redis Namf retry queue", map[string]any{"error": rqErr.Error()})
+			os.Exit(1)
+		}
+		retryQueue = rq
+	} else {
+		retryQueue = namf.NewRetryingClient(namfClient, appConfig.NamfQueueMaxAttempts)
+	}
+	retryQueue.Start()
+	defer retryQueue.Stop()
 
 	authService := service.NewAuthServiceWithStoreAndTTL(
 		controlPlaneClient,
-		retryingNamf,
+		retryQueue,
 		store,
 		time.Duration(appConfig.AuthContextTTLSeconds)*time.Second,
 	)
@@ -134,7 +145,7 @@ func main() {
 		namfClient.WithTokenSource(namfTokenSource)
 	}
 
-	handler := api.NewHandlerWithAuthorization(authService, api.AuthorizationConfig{
+	handler := api.NewHandlerWithOptions(authService, api.AuthorizationConfig{
 		BearerToken: appConfig.SBIBearerToken,
 		OAuth2: api.OAuth2Config{
 			Enabled:               appConfig.OAuth2Enabled,
@@ -143,7 +154,7 @@ func main() {
 			JWKSProvider:          jwksProvider,
 			IntrospectionProvider: introspector,
 		},
-	})
+	}, appConfig.OverloadThreshold)
 
 	server := &http.Server{
 		Addr:    appConfig.Address(),

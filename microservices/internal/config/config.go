@@ -69,6 +69,16 @@ type Config struct {
 	// for Namf notifications that fail all synchronous delivery retries.
 	// 0 means use the default (10).
 	NamfQueueMaxAttempts int
+	// NamfQueueBackend selects the async retry queue backend.
+	// Accepted values: "memory" (default), "redis".
+	NamfQueueBackend string
+	// NamfRedisURL is the Redis connection URL used when NamfQueueBackend="redis".
+	// Example: redis://localhost:6379/0
+	NamfRedisURL string
+	// OverloadThreshold is the maximum number of concurrent in-flight requests
+	// before the NF Overload Control middleware starts shedding load with HTTP 503.
+	// 0 means use the built-in default of 500.
+	OverloadThreshold int
 }
 
 func Load() Config {
@@ -163,6 +173,9 @@ func Load() Config {
 		TLSCertReloadIntervalSeconds:   parseIntEnvDefault("AUSF_TLS_CERT_RELOAD_INTERVAL_SECONDS", 30),
 		ShutdownTimeoutSeconds:         parseIntEnvDefault("AUSF_SHUTDOWN_TIMEOUT_SECONDS", 30),
 		NamfQueueMaxAttempts:           parseIntEnvDefault("AUSF_NAMF_QUEUE_MAX_ATTEMPTS", 10),
+		NamfQueueBackend:               os.Getenv("AUSF_NAMF_QUEUE_BACKEND"),
+		NamfRedisURL:                   os.Getenv("AUSF_NAMF_REDIS_URL"),
+		OverloadThreshold:              parseIntEnvDefault("AUSF_OVERLOAD_THRESHOLD", 500),
 	}
 }
 

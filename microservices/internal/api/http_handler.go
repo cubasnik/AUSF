@@ -10,8 +10,9 @@ import (
 )
 
 type Handler struct {
-	authService   *service.AuthService
-	authorization AuthorizationConfig
+	authService       *service.AuthService
+	authorization     AuthorizationConfig
+	overloadThreshold int
 }
 
 type createAuthRequest struct {
@@ -35,13 +36,24 @@ func NewHandlerWithAuthorization(authService *service.AuthService, authorization
 	return Handler{authService: authService, authorization: authorization}
 }
 
+// NewHandlerWithOptions is like NewHandlerWithAuthorization but also sets the
+// overload-control threshold (AUSF_OVERLOAD_THRESHOLD).  threshold ≤ 0 uses
+// the built-in default of 500 concurrent requests.
+func NewHandlerWithOptions(authService *service.AuthService, authorization AuthorizationConfig, overloadThreshold int) Handler {
+	return Handler{
+		authService:       authService,
+		authorization:     authorization,
+		overloadThreshold: overloadThreshold,
+	}
+}
+
 func (handler Handler) Routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", handler.health)
 	mux.HandleFunc("/metrics", handler.metrics)
 	mux.HandleFunc("/nausf-auth/v1/ue-authentications", handler.createUEAuthentication)
 	mux.HandleFunc("/nausf-auth/v1/ue-authentications/", handler.authContextRoutes)
-	return withObservability(withAuthorization(mux, handler.authorization))
+	return withObservability(withOverloadControl(withAuthorization(mux, handler.authorization), handler.overloadThreshold))
 }
 
 func (handler Handler) health(writer http.ResponseWriter, _ *http.Request) {

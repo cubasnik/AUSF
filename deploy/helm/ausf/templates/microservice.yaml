@@ -47,6 +47,17 @@ spec:
             # Control-plane address resolves to in-cluster Service
             - name: CONTROL_PLANE_BASE_URL
               value: "http://{{ $fullname }}-control-plane.{{ .Values.namespace }}.svc.cluster.local:{{ .Values.controlPlane.service.port }}"
+            {{- if eq .Values.namfQueue.backend "redis" }}
+            # Persistent Namf retry queue via Redis Streams (задача Е)
+            - name: AUSF_NAMF_QUEUE_BACKEND
+              value: "redis"
+            - name: AUSF_NAMF_REDIS_URL
+              {{- if .Values.redis.enabled }}
+              value: "redis://{{ .Release.Name }}-redis-master.{{ .Values.namespace }}.svc.cluster.local:6379/0"
+              {{- else }}
+              value: {{ .Values.namfQueue.redisURL | quote }}
+              {{- end }}
+            {{- end }}
             {{- if .Values.microservice.existingSecret }}
             # Sensitive values from pre-existing Secret
             envFrom:
