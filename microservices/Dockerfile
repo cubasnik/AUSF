@@ -1,14 +1,16 @@
-FROM mcr.microsoft.com/devcontainers/go:1-1.22-bookworm AS builder
+FROM golang:1.25-bookworm AS builder
 
 WORKDIR /app
 
-COPY go.mod ./
+COPY go.mod go.sum ./
+RUN go mod download
+
 COPY cmd ./cmd
 COPY internal ./internal
 
 RUN go build -o /out/ausf ./cmd/ausf
 
-FROM mcr.microsoft.com/devcontainers/go:1-1.22-bookworm
+FROM golang:1.25-bookworm
 
 WORKDIR /app
 

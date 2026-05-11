@@ -9,6 +9,101 @@
 | Облако / микросервисы | HTTP-сервис AUSF, обращённый к SBI | Go |
 | Автоматизация | Дымовые тесты, интеграционные вспомогательные средства, операционные скрипты | Python |
 
+## Быстрый старт
+
+**Требования:** Docker Desktop (compose v2), Python 3.10+, Go 1.22+, Java 21+, Maven.
+
+### 1. Запустить весь стек одной командой
+
+```bash
+cd AUSF
+docker compose up --build
+```
+
+После старта сервисы доступны по адресам:
+
+| Сервис | URL |
+|--------|-----|
+| AUSF Go (SBI) | <http://localhost:8080> |
+| Control-plane Java | <http://localhost:8081> |
+| Mock UDM | <http://localhost:8090> |
+| Mock NRF | <http://localhost:8091> |
+| Mock AMF | <http://localhost:8092> |
+
+Проверить работоспособность:
+
+```bash
+curl http://localhost:8080/healthz
+# {"status":"ok"}
+```
+
+### 2. Запустить базовый happy-path smoke-тест
+
+```bash
+# Установить зависимости Python один раз
+pip install -r automation/requirements.txt
+
+# Запустить smoke-тест 5G-AKA (требует работающего стека)
+python automation/scripts/smoke_test_http_udm.py
+```
+
+### 3. Запустить полный smoke-набор
+
+Поднимает стек, прогоняет все happy-path и негативные сценарии, останавливает стек:
+
+```bash
+python automation/scripts/run_http_udm_smoke_suite.py
+```
+
+На Windows без `make`:
+
+```powershell
+pwsh -File automation/scripts/run_fast_validation.ps1
+```
+
+### 4. Полная валидация (unit-тесты + smoke + TLS + Redis-failover)
+
+```bash
+python automation/scripts/run_full_validation.py
+```
+
+Или через Makefile:
+
+```bash
+make validate-fast        # быстрый прогон (рекомендуется перед push)
+make validate-all         # полная валидация
+```
+
+### 5. Запустить только unit-тесты
+
+```bash
+# Go
+cd microservices && go test ./...
+
+# Java
+cd control-plane && mvn -q test
+
+# Python
+cd automation && python -m unittest discover -s tests
+```
+
+### 6. Запустить chaos/resilience тесты (Горизонт 10)
+
+```bash
+# Circuit-breaker: убить control-plane, убедиться, что AUSF возвращает 503,
+# перезапустить, убедиться что breaker сбрасывается и auth проходит
+python automation/scripts/smoke_test_chaos_control_plane_down.py
+
+# Redis-failover: стек с Redis-очередью, остановить Redis mid-flight,
+# убедиться, что AUSF не падает и auth возвращает SUCCESS
+python automation/scripts/smoke_test_redis_failover.py
+
+# 20 параллельных аутентификаций без data-race и перепутанных xresStar
+python automation/scripts/smoke_test_concurrent_auth.py
+```
+
+---
+
 ## Текущий охват
 
 Проект является работающей основой, а не полноценным AUSF для производственного использования. В настоящее время включает:
