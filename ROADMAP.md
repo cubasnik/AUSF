@@ -184,6 +184,8 @@
 | 17 | ~~PostgreSQL production hardening — Flyway migrations~~ ✅ | — | Java control-plane |
 | 18 | ~~Production Namf_Communication — async retry queue~~ ✅ | TS 29.518 | Go microservice |
 | 19 | ~~Ротация сертификатов — SIGHUP + expiry warning~~ ✅ | RFC 8446 | Go microservice |
+| 20 | ~~HPA + PodDisruptionBudget + NetworkPolicy (Helm chart)~~ ✅ | — | Kubernetes / Helm |
+| 21 | ~~PostgreSQL Bitnami sub-chart + `startupProbe` для control-plane~~ ✅ | — | Kubernetes / Helm |
 
 ---
 
@@ -193,10 +195,7 @@
 
 ### Горизонт 4 — Kubernetes production-ready
 
-| # | Задача | Уровень | Описание |
-|---|--------|---------|----------|
-| А | **HPA + PodDisruptionBudget + NetworkPolicy** | Kubernetes / Helm | Helm chart не содержит `HorizontalPodAutoscaler` (CPU/RPS метрики), `PodDisruptionBudget` (минимум 1 pod при rolling upgrade) и `NetworkPolicy` (разрешить только SBI-трафик между сервисами). Без PDB rolling update может уронить сервис; без NetworkPolicy любой pod в namespace получает доступ к AUSF. |
-| Б | **PostgreSQL Bitnami sub-chart + `startupProbe` для control-plane** | Kubernetes / Helm | `values.yaml` не включает зависимость от `bitnami/postgresql` — в production развёртывании БД создаётся вручную. Добавить секцию `postgresql:` с `enabled: true / false` и `externalDatabase:` для bring-your-own. Также: Spring Boot стартует ~30 с; `livenessProbe` с `initialDelaySeconds: 30` убивает pod при медленном JVM — нужен `startupProbe` с `failureThreshold: 15`. |
+Все задачи горизонта выполнены — см. «Выполненные задачи» #20–21.
 
 ### Горизонт 5 — Метрики и алерты
 

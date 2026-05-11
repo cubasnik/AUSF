@@ -1,0 +1,31 @@
+{{- $fullname := include "ausf.fullname" . }}
+{{- if .Values.microservice.pdb.enabled }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ $fullname }}-microservice
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "ausf.labels" . | nindent 4 }}
+spec:
+  minAvailable: {{ .Values.microservice.pdb.minAvailable }}
+  selector:
+    matchLabels:
+      {{- include "ausf.microservice.selectorLabels" . | nindent 6 }}
+{{- end }}
+{{- if .Values.controlPlane.pdb.enabled }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ $fullname }}-control-plane
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "ausf.labels" . | nindent 4 }}
+spec:
+  minAvailable: {{ .Values.controlPlane.pdb.minAvailable }}
+  selector:
+    matchLabels:
+      {{- include "ausf.controlplane.selectorLabels" . | nindent 6 }}
+{{- end }}

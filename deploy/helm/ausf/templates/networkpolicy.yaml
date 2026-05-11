@@ -1,0 +1,74 @@
+{{- $fullname := include "ausf.fullname" . }}
+{{- if .Values.networkPolicy.enabled }}
+---
+# NetworkPolicy for the Go microservice (AUSF SBI gateway).
+# Allows inbound SBI traffic from any caller (AMF, SMF, etc.) on the service
+# port, and restricts outbound to in-cluster DNS plus all TCP (UDM/NRF/AMF
+# may be in any namespace or external).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ $fullname }}-microservice
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "ausf.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "ausf.microservice.selectorLabels" . | nindent 6 }}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Accept SBI requests from any source (5GC NFs may live in any namespace).
+    - ports:
+        - port: {{ .Values.microservice.service.port }}
+          protocol: TCP
+  egress:
+    # DNS resolution.
+    - ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    # All TCP egress: control-plane (8081), NRF, UDM, AMF callbacks.
+    - ports:
+        - protocol: TCP
+---
+# NetworkPolicy for the Java control-plane.
+# Only the microservice pods may call the control-plane; it can reach out to
+# UDM/NRF/PostgreSQL anywhere in-cluster or externally.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ $fullname }}-control-plane
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "ausf.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "ausf.controlplane.selectorLabels" . | nindent 6 }}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Only accept traffic from the microservice.
+    - from:
+        - podSelector:
+            matchLabels:
+              {{- include "ausf.microservice.selectorLabels" . | nindent 14 }}
+      ports:
+        - port: {{ .Values.controlPlane.service.port }}
+          protocol: TCP
+  egress:
+    # DNS resolution.
+    - ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    # All TCP egress: PostgreSQL, UDM, NRF.
+    - ports:
+        - protocol: TCP
+{{- end }}

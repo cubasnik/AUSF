@@ -58,6 +58,19 @@ microservice:
   tolerations: []
   affinity: {}
 
+  # Horizontal Pod Autoscaler.  Disabled by default (replicaCount governs scale).
+  hpa:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 5
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: ""
+
+  # PodDisruptionBudget — keeps at least 1 pod available during rolling updates.
+  pdb:
+    enabled: true
+    minAvailable: 1
+
 # ──────────────────────────────────────────────────────────────────────────────
 # Java control-plane
 # ──────────────────────────────────────────────────────────────────────────────
@@ -93,6 +106,67 @@ controlPlane:
   nodeSelector: {}
   tolerations: []
   affinity: {}
+
+  # Horizontal Pod Autoscaler.
+  hpa:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 3
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: ""
+
+  # PodDisruptionBudget.
+  pdb:
+    enabled: true
+    minAvailable: 1
+
+# ──────────────────────────────────────────────────────────────────────────────
+# NetworkPolicy (requires a CNI that supports NetworkPolicy, e.g. Calico/Cilium)
+# ──────────────────────────────────────────────────────────────────────────────
+networkPolicy:
+  # When true: control-plane accepts ingress only from microservice pods;
+  # microservice accepts SBI ingress from anywhere.
+  enabled: false
+
+# ──────────────────────────────────────────────────────────────────────────────
+# PostgreSQL (Bitnami sub-chart)
+# Set enabled: false and fill externalDatabase to use a pre-existing database.
+# ──────────────────────────────────────────────────────────────────────────────
+postgresql:
+  enabled: true
+  auth:
+    username: ausf
+    database: ausf
+    # Leave existingSecret empty to let the sub-chart generate a random password
+    # stored in <release>-postgresql.  Set to a pre-created Secret name to
+    # supply your own credentials.
+    existingSecret: ""
+    secretKeys:
+      # Key inside the Secret that holds the ausf user password.
+      userPasswordKey: password
+  primary:
+    persistence:
+      enabled: true
+      size: 8Gi
+    resources:
+      requests:
+        cpu: "100m"
+        memory: "256Mi"
+      limits:
+        cpu: "500m"
+        memory: "512Mi"
+
+# ──────────────────────────────────────────────────────────────────────────────
+# External database (used when postgresql.enabled=false)
+# ──────────────────────────────────────────────────────────────────────────────
+externalDatabase:
+  host: ""
+  port: 5432
+  database: ausf
+  username: ausf
+  # Name of a pre-existing Secret with a key holding the database password.
+  existingSecret: ""
+  existingSecretKey: password
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Mock network functions (disable in production)
