@@ -1,54 +1,54 @@
-# AUSF 5G Core Polyglot Workspace
+# AUSF 5G Core — Многоязычное рабочее пространство
 
-This repository contains a split-by-layer AUSF workspace for a 5G core implementation. The goal is to keep each concern in the language that best fits it:
+Репозиторий содержит рабочее пространство AUSF, разделённое по уровням реализации для 5G-ядра. Цель — держать каждую задачу в языке, наиболее для неё подходящем:
 
-| Layer | Main purpose | Language |
+| Уровень | Основная задача | Язык |
 | --- | --- | --- |
-| Networking / PFCP / low-level | Packet-oriented and transport-near code | C++ |
-| Control plane logic | Authentication orchestration, UDM-facing vector generation, subscriber state | Java |
-| Cloud / microservices | SBI-facing AUSF HTTP service | Go |
-| Automation | Smoke tests, integration helpers, ops scripts | Python |
+| Сетевой / PFCP / низкоуровневый | Пакетно-ориентированный и транспортно-близкий код | C++ |
+| Логика управляющего уровня | Оркестрация аутентификации, генерация векторов на стороне UDM, состояние абонента | Java |
+| Облако / микросервисы | HTTP-сервис AUSF, обращённый к SBI | Go |
+| Автоматизация | Дымовые тесты, интеграционные вспомогательные средства, операционные скрипты | Python |
 
-## Current scope
+## Текущий охват
 
-The project is a working foundation, not a complete production AUSF. It currently includes:
+Проект является работающей основой, а не полноценным AUSF для производственного использования. В настоящее время включает:
 
-- C++ PFCP/networking sample with buildable CMake target.
-- Java control-plane service with mock UDM/ARPF orchestration, standards-backed Milenage/TUAK vector generation, and PostgreSQL-backed subscriber storage.
-- Go AUSF microservice exposing a concrete `nausf-auth` style API and delegating challenge/confirmation to Java.
-- Auth context TTL expiration: contexts are automatically invalidated after a configurable number of seconds (`AUSF_AUTH_CONTEXT_TTL_SECONDS`). Expired contexts return `404 CONTEXT_NOT_FOUND`.
-- Optional file-backed auth context persistence (`AUSF_AUTH_CONTEXT_STORE_FILE`): a running AUSF can reload its in-flight contexts after a restart, allowing confirmation to succeed even after a container restart.
-- Python automation client and smoke-test helpers for the Go service contract, including context persistence and TTL scenarios.
-- Root orchestration via `Makefile` and container startup via `docker-compose.yml`.
-- Branch protection on `main` requires the `validate` CI check to pass before any PR can be merged.
+- Пример C++ PFCP/сети с собираемым CMake-таргетом.
+- Сервис управляющего уровня на Java с оркестрацией через макет UDM/ARPF, генерацией векторов аутентификации на основе стандартов Milenage/TUAK и хранилищем абонентов на базе PostgreSQL.
+- Микросервис AUSF на Go, предоставляющий конкретный API в стиле `nausf-auth` и делегирующий операции запроса/подтверждения в Java.
+- Истечение TTL контекста аутентификации: контексты автоматически аннулируются по истечении настраиваемого числа секунд (`AUSF_AUTH_CONTEXT_TTL_SECONDS`). Истёкшие контексты возвращают `404 CONTEXT_NOT_FOUND`.
+- Опциональное сохранение контекста аутентификации в файл (`AUSF_AUTH_CONTEXT_STORE_FILE`): работающий AUSF может перезагрузить активные контексты после перезапуска, позволяя успешно выполнить подтверждение даже после перезапуска контейнера.
+- Клиент автоматизации Python и вспомогательные средства дымовых тестов для контракта сервиса Go, включая сценарии с сохранением контекстов и TTL.
+- Корневая оркестрация через `Makefile` и запуск контейнеров через `docker-compose.yml`.
+- Защита ветки `main` требует прохождения проверки CI `validate` перед слиянием любого PR.
 
-## Contribution templates
+## Шаблоны участника
 
-See `CONTRIBUTING.md` for the contributor workflow, validation expectations, and PR/release preparation guidance.
-See `SECURITY.md` for vulnerability handling and `SUPPORT.md` for routing general support requests.
+Рабочий процесс для участников, ожидания по валидации и руководство по подготовке PR/релизов см. в `CONTRIBUTING.md`.
+Порядок работы с уязвимостями см. в `SECURITY.md`, порядок адресации запросов поддержки — в `SUPPORT.md`.
 
-Use the repository templates in `.github/` when preparing change reviews or release summaries:
+Используйте шаблоны репозитория из `.github/` при подготовке проверок изменений и сводок по релизам:
 
-- `.github/PULL_REQUEST_TEMPLATE.md` captures scope, affected AUSF flows, validation commands, and residual risks for PRs.
-- `.github/RELEASE_NOTE_TEMPLATE.md` provides a release-ready summary with validation evidence, environment notes, and go/no-go checks.
-- `.github/RELEASE_GATE_CHECKLIST.md` is a QA and ops oriented release gate checklist for final validation, risk review, and sign-off.
-- `.github/ISSUE_TEMPLATE/bug_report.md` is for reproducible runtime, contract, or validation defects.
-- `.github/ISSUE_TEMPLATE/feature_request.md` is for proposing new behavior, API changes, or validation coverage.
-- `.github/ISSUE_TEMPLATE/release_candidate.md` is for release-candidate tracking, validation status, and go/no-go decisions.
-- `.github/ISSUE_TEMPLATE/test_scenario_request.md` is for requesting new smoke, regression, TLS, restart, or negative-path coverage.
+- `.github/PULL_REQUEST_TEMPLATE.md` — фиксирует область охвата, затронутые потоки AUSF, команды валидации и остаточные риски для PR.
+- `.github/RELEASE_NOTE_TEMPLATE.md` — предоставляет готовое к релизу резюме с доказательствами валидации, примечаниями по среде и критериями принятия.
+- `.github/RELEASE_GATE_CHECKLIST.md` — контрольный список допуска к релизу для финальной валидации, анализа рисков и подписания.
+- `.github/ISSUE_TEMPLATE/bug_report.md` — для воспроизводимых дефектов во время выполнения, в контракте или при валидации.
+- `.github/ISSUE_TEMPLATE/feature_request.md` — для предложений нового поведения, изменений API или расширения покрытия валидации.
+- `.github/ISSUE_TEMPLATE/release_candidate.md` — для отслеживания релизных кандидатов, статуса валидации и критериев принятия.
+- `.github/ISSUE_TEMPLATE/test_scenario_request.md` — для запроса нового smoke-, регрессионного, TLS-, restart- или негативного покрытия.
 
-These templates are intended to keep bugfix, feature, regression, and release documentation aligned with the actual validation workflow in this workspace.
+Эти шаблоны призваны обеспечить согласованность документации по исправлениям, новым функциям, регрессиям и релизам с реальным рабочим процессом валидации в данном рабочем пространстве.
 
-### How to use the templates
+### Как использовать шаблоны
 
-- Use `.github/ISSUE_TEMPLATE/bug_report.md` when you have one failing scenario, one expected result, and one actual result that can be reproduced locally, in compose, or in CI.
-- Use `.github/ISSUE_TEMPLATE/feature_request.md` when you want to define a new capability together with acceptance criteria and expected validation scope.
-- Use `.github/ISSUE_TEMPLATE/test_scenario_request.md` when behavior is already understood but coverage is missing and you need a new targeted validation scenario.
-- Use `.github/PULL_REQUEST_TEMPLATE.md` when the code change exists and you need to document scope, validation, and residual risks for review.
-- Use `.github/RELEASE_NOTE_TEMPLATE.md` when the change set is accepted and you need a user-facing or operator-facing release summary.
-- Use `.github/RELEASE_GATE_CHECKLIST.md` and `.github/ISSUE_TEMPLATE/release_candidate.md` when preparing a candidate build for sign-off.
+- Используйте `.github/ISSUE_TEMPLATE/bug_report.md`, если у вас есть один сценарий сбоя, ожидаемый и фактический результаты, воспроизводимые локально, в compose или в CI.
+- Используйте `.github/ISSUE_TEMPLATE/feature_request.md`, если хотите определить новую возможность вместе с критериями приёмки и ожидаемым охватом валидации.
+- Используйте `.github/ISSUE_TEMPLATE/test_scenario_request.md`, если поведение уже понятно, но покрытие отсутствует и нужен новый целевой сценарий валидации.
+- Используйте `.github/PULL_REQUEST_TEMPLATE.md`, если изменение кода существует и нужно задокументировать область охвата, валидацию и остаточные риски для проверки.
+- Используйте `.github/RELEASE_NOTE_TEMPLATE.md`, если набор изменений принят и нужно пользовательское или операционное резюме по релизу.
+- Используйте `.github/RELEASE_GATE_CHECKLIST.md` и `.github/ISSUE_TEMPLATE/release_candidate.md` при подготовке сборки-кандидата к подписанию.
 
-Minimal examples:
+Минимальные примеры:
 
 ```text
 Bug report: "POST /nausf-auth/v1/ue-authentications/{authCtxId}/5g-aka-confirmation returns 401 after a valid refreshed RES* in the sync-failure flow; expected 200 SUCCESS. Reproduced with python automation/scripts/smoke_test_http_udm_sync_failure.py"
@@ -62,40 +62,40 @@ PR summary: "Fix stale auth-state overwrite in sync-failure confirmation handlin
 Release summary: "This release stabilizes repeated confirmation and sync-failure handling in AUSF authentication flows and updates validation evidence for compose-based regression."
 ```
 
-### Recommended labels
+### Рекомендуемые метки
 
-Use one primary workflow label and add optional focus labels only when they improve routing or triage.
+Используйте одну основную метку рабочего процесса и добавляйте дополнительные метки фокуса только тогда, когда они улучшают маршрутизацию или сортировку.
 
-The canonical label catalog lives in `.github/labels.json` and can be synced to GitHub with:
+Каноническая таблица меток хранится в `.github/labels.json` и может быть синхронизирована с GitHub командой:
 
 ```powershell
 pwsh ./automation/scripts/sync_github_labels.ps1
 ```
 
-If you need a different target repository, pass `-Repository owner/repo`.
+Для другого целевого репозитория передайте `-Repository owner/repo`.
 
-- Workflow labels: `bug`, `enhancement`, `testing`, `release`
-- Change-shape labels: `docs`, `ci`, `ops`, `security`
-- Flow labels: `5g-aka`, `eap-aka-prime`, `tls`, `ttl`, `restart-persistence`, `nrf-udm`
-- Risk labels: `regression-risk`, `breaking-change`, `needs-smoke`, `needs-full-validation`
+- Метки рабочего процесса: `bug`, `enhancement`, `testing`, `release`
+- Метки формы изменений: `docs`, `ci`, `ops`, `security`
+- Метки потоков: `5g-aka`, `eap-aka-prime`, `tls`, `ttl`, `restart-persistence`, `nrf-udm`
+- Метки рисков: `regression-risk`, `breaking-change`, `needs-smoke`, `needs-full-validation`
 
-Suggested usage:
+Рекомендуемое использование:
 
-- A reproducible defect in an existing path: `bug` plus one flow label and optionally `regression-risk`
-- A new capability with acceptance criteria: `enhancement` plus one flow label and optionally `breaking-change`
-- A missing smoke or regression path: `testing` plus `needs-smoke` or `needs-full-validation`
-- A release candidate or sign-off thread: `release` plus the highest-risk flow labels involved
+- Воспроизводимый дефект в существующем пути: `bug` плюс одна метка потока и опционально `regression-risk`
+- Новая возможность с критериями приёмки: `enhancement` плюс одна метка потока и опционально `breaking-change`
+- Отсутствующий smoke- или регрессионный путь: `testing` плюс `needs-smoke` или `needs-full-validation`
+- Релизный кандидат или ветка подписания: `release` плюс метки потоков с наибольшим риском
 
-## Implemented AUSF flow
+## Реализованный поток AUSF
 
-Current layering is now explicit:
+Текущее разделение по уровням теперь явное:
 
-1. The external client talks to the Go SBI service.
-2. The Go service creates an external `authCtxId` and delegates challenge/confirm operations to the Java control-plane.
-3. The Java control-plane loads subscriber profiles from PostgreSQL and issues Milenage/TUAK-backed authentication vectors through the current mock or HTTP UDM contract.
-4. The Go service returns 3GPP-shaped DTOs, including `ProblemDetails` on errors.
+1. Внешний клиент обращается к SBI-сервису Go.
+2. Сервис Go создаёт внешний `authCtxId` и делегирует операции запроса/подтверждения в управляющий уровень Java.
+3. Управляющий уровень Java загружает профили абонентов из PostgreSQL и выдаёт векторы аутентификации, подкреплённые Milenage/TUAK, через текущий макет или HTTP-контракт UDM.
+4. Сервис Go возвращает DTO, соответствующие 3GPP, включая `ProblemDetails` при ошибках.
 
-The Go service exposes a simplified AUSF flow under `nausf-auth`:
+Сервис Go предоставляет упрощённый поток AUSF под `nausf-auth`:
 
 1. `POST /nausf-auth/v1/ue-authentications`
 2. `GET /nausf-auth/v1/ue-authentications/{authCtxId}`
@@ -103,9 +103,9 @@ The Go service exposes a simplified AUSF flow under `nausf-auth`:
 4. `POST /nausf-auth/v1/ue-authentications/{authCtxId}/eap-session`
 5. `DELETE /nausf-auth/v1/ue-authentications/{authCtxId}`
 
-### Protocol interaction diagram
+### Диаграмма взаимодействия протоколов
 
-The diagram below shows how the four runtime components interact and which protocol / interface is carried on each arrow.
+Диаграмма ниже показывает, как взаимодействуют четыре компонента среды выполнения и какой протокол/интерфейс передаётся по каждой стрелке.
 
 ```mermaid
 %%{init: {
@@ -194,12 +194,12 @@ sequenceDiagram
     NRF-->>AUSF: 204 No Content
 ```
 
-Supported authentication modes:
+Поддерживаемые режимы аутентификации:
 
 - `5G_AKA`
 - `EAP_AKA_PRIME`
 
-Example create request:
+Пример запроса на создание:
 
 ```json
 {
@@ -210,7 +210,7 @@ Example create request:
 }
 ```
 
-Example `5G_AKA` response:
+Пример ответа `5G_AKA`:
 
 ```json
 {
@@ -233,7 +233,7 @@ Example `5G_AKA` response:
 }
 ```
 
-Example `EAP_AKA_PRIME` response:
+Пример ответа `EAP_AKA_PRIME`:
 
 ```json
 {
@@ -255,7 +255,7 @@ Example `EAP_AKA_PRIME` response:
 }
 ```
 
-Example `ProblemDetails` error:
+Пример ошибки `ProblemDetails`:
 
 ```json
 {
@@ -268,120 +268,120 @@ Example `ProblemDetails` error:
 }
 ```
 
-## Operational contract
+## Операционный контракт
 
-### Public endpoint contract
+### Контракт публичного эндпоинта
 
-| Method and path | Success response | Failure responses |
+| Метод и путь | Успешный ответ | Ответы при ошибках |
 | --- | --- | --- |
-| `GET /healthz` | `200 OK`; body: `{"status":"ok"}` | No endpoint-specific `ProblemDetails` contract; failures are generic transport/runtime failures |
-| `GET /metrics` | `200 OK`; body: Prometheus text exposition for AUSF HTTP request counters and latency summaries | No endpoint-specific `ProblemDetails` contract |
-| `POST /nausf-auth/v1/ue-authentications` | `201 Created`; `Location` header set to `/nausf-auth/v1/ue-authentications/{authCtxId}`; body contains `authCtxId`, `supi`, `authType`, `status=CHALLENGE_SENT`, and either `5gAuthData` for `5G_AKA` or `eapSession` for `EAP_AKA_PRIME` | `400 MALFORMED_REQUEST`; `400 MANDATORY_IE_MISSING`; `400 INVALID_NOTIFICATION_URI`; `400 UNSUPPORTED_AUTH_TYPE`; `404 SUBSCRIBER_NOT_FOUND`; `502/503 CONTROL_PLANE_UNAVAILABLE`; `405 METHOD_NOT_ALLOWED` |
-| `GET /nausf-auth/v1/ue-authentications/{authCtxId}` | `200 OK`; body contains the currently stored auth context for `authCtxId` | `404 CONTEXT_NOT_FOUND` |
-| `POST /nausf-auth/v1/ue-authentications/{authCtxId}/5g-aka-confirmation` | `200 OK`; body contains either `authResult=SUCCESS`, `kseaf`, and confirmation `message`, or `authResult=SYNC_FAILURE`, refreshed `5gAuthData`, and re-sync `message` | `400 MALFORMED_REQUEST`; `400 MANDATORY_IE_MISSING`; `400 INVALID_CONFIRMATION_PAYLOAD`; `404 CONTEXT_NOT_FOUND`; `401 AUTHENTICATION_REJECTED`; `502/503 CONTROL_PLANE_UNAVAILABLE` |
-| `POST /nausf-auth/v1/ue-authentications/{authCtxId}/eap-session` | `200 OK`; body contains either `authResult=SUCCESS`, `kseaf`, and confirmation `message`, or `authResult=ONGOING`, refreshed `eapSession`, and refresh `message` for synchronization-failure, re-authentication, or fast re-authentication | `400 MALFORMED_REQUEST`; `400 INVALID_CONFIRMATION_PAYLOAD`; `404 CONTEXT_NOT_FOUND`; `401 AUTHENTICATION_REJECTED`; `502/503 CONTROL_PLANE_UNAVAILABLE` |
-| `DELETE /nausf-auth/v1/ue-authentications/{authCtxId}` | `204 No Content`; response body omitted | `404 CONTEXT_NOT_FOUND` |
+| `GET /healthz` | `200 OK`; тело: `{"status":"ok"}` | Нет специфического контракта `ProblemDetails`; сбои являются общими транспортными/runtime-ошибками |
+| `GET /metrics` | `200 OK`; тело: Prometheus-метрики для счётчиков HTTP-запросов и гистограмм задержек AUSF | Нет специфического контракта `ProblemDetails` |
+| `POST /nausf-auth/v1/ue-authentications` | `201 Created`; заголовок `Location` указывает на `/nausf-auth/v1/ue-authentications/{authCtxId}`; тело содержит `authCtxId`, `supi`, `authType`, `status=CHALLENGE_SENT` и либо `5gAuthData` для `5G_AKA`, либо `eapSession` для `EAP_AKA_PRIME` | `400 MALFORMED_REQUEST`; `400 MANDATORY_IE_MISSING`; `400 INVALID_NOTIFICATION_URI`; `400 UNSUPPORTED_AUTH_TYPE`; `404 SUBSCRIBER_NOT_FOUND`; `502/503 CONTROL_PLANE_UNAVAILABLE`; `405 METHOD_NOT_ALLOWED` |
+| `GET /nausf-auth/v1/ue-authentications/{authCtxId}` | `200 OK`; тело содержит текущий сохранённый контекст аутентификации для `authCtxId` | `404 CONTEXT_NOT_FOUND` |
+| `POST /nausf-auth/v1/ue-authentications/{authCtxId}/5g-aka-confirmation` | `200 OK`; тело содержит либо `authResult=SUCCESS`, `kseaf` и `message` подтверждения, либо `authResult=SYNC_FAILURE`, обновлённые `5gAuthData` и `message` повторной синхронизации | `400 MALFORMED_REQUEST`; `400 MANDATORY_IE_MISSING`; `400 INVALID_CONFIRMATION_PAYLOAD`; `404 CONTEXT_NOT_FOUND`; `401 AUTHENTICATION_REJECTED`; `502/503 CONTROL_PLANE_UNAVAILABLE` |
+| `POST /nausf-auth/v1/ue-authentications/{authCtxId}/eap-session` | `200 OK`; тело содержит либо `authResult=SUCCESS`, `kseaf` и `message` подтверждения, либо `authResult=ONGOING`, обновлённую `eapSession` и `message` обновления — для сбоя синхронизации, повторной или быстрой повторной аутентификации | `400 MALFORMED_REQUEST`; `400 INVALID_CONFIRMATION_PAYLOAD`; `404 CONTEXT_NOT_FOUND`; `401 AUTHENTICATION_REJECTED`; `502/503 CONTROL_PLANE_UNAVAILABLE` |
+| `DELETE /nausf-auth/v1/ue-authentications/{authCtxId}` | `204 No Content`; тело ответа отсутствует | `404 CONTEXT_NOT_FOUND` |
 
-Additional route behavior:
+Дополнительное поведение маршрутов:
 
-- Unknown AUSF sub-resources return `404 RESOURCE_UNKNOWN`.
-- `ue-authentications` rejects malformed JSON with `400 MALFORMED_REQUEST`.
-- `ue-authentications` accepts only `5G_AKA` and `EAP_AKA_PRIME` when `authType` is provided and rejects any other non-empty value with `400 UNSUPPORTED_AUTH_TYPE`.
-- When `AUSF_SBI_BEARER_TOKEN` is set, all `/nausf-auth/v1/ue-authentications...` routes require `Authorization: Bearer <token>` and reject missing or invalid tokens with `401 UNAUTHORIZED`; `/healthz` and `/metrics` remain unauthenticated for operability.
-- `5g-aka-confirmation` requires exactly one of `resStar` or `auts` and rejects `eapPayload` with `400 INVALID_CONFIRMATION_PAYLOAD`.
-- `5g-aka-confirmation` rejects an empty JSON payload with `400 MANDATORY_IE_MISSING` and `detail="resStar or auts is required"`.
-- `eap-session` requires `eapPayload` and rejects `resStar` with `400 INVALID_CONFIRMATION_PAYLOAD`.
-- In the current development contract, `eapPayload` for `EAP_AKA_PRIME` must carry `EAP-Response/AKA'-Challenge RES*=<xresStar>`; a simple echo of the request challenge is rejected.
-- `eap-session` also accepts minimal `EAP-Response/AKA'-Synchronization-Failure AUTS=...`, `EAP-Response/AKA'-Reauthentication ...`, and `EAP-Response/AKA'-Fast-Reauthentication ...` triggers and answers with `authResult=ONGOING` plus a refreshed `eapSession` on the same `authCtxId`.
-- The current Java -> Go propagated failure causes are `SUBSCRIBER_NOT_FOUND`, `AUTHENTICATION_REJECTED`, `CONTEXT_NOT_FOUND`, and `CONTROL_PLANE_UNAVAILABLE`.
-- All Go HTTP responses include `X-Trace-Id` and `traceparent` headers. Request logs include the same trace identifier in `trace_id=...` format.
-- The Go control-plane HTTP client now uses a built-in circuit breaker: repeated transport/5xx failures open the breaker and subsequent calls fail fast with `503 CONTROL_PLANE_UNAVAILABLE` until the cooldown window elapses.
+- Неизвестные под-ресурсы AUSF возвращают `404 RESOURCE_UNKNOWN`.
+- `ue-authentications` отклоняет некорректный JSON с `400 MALFORMED_REQUEST`.
+- `ue-authentications` принимает только `5G_AKA` и `EAP_AKA_PRIME` при наличии `authType` и отклоняет любое другое непустое значение с `400 UNSUPPORTED_AUTH_TYPE`.
+- Когда установлен `AUSF_SBI_BEARER_TOKEN`, все маршруты `/nausf-auth/v1/ue-authentications...` требуют `Authorization: Bearer <token>` и отклоняют отсутствующие или недопустимые токены с `401 UNAUTHORIZED`; `/healthz` и `/metrics` остаются неаутентифицированными для операционных нужд.
+- `5g-aka-confirmation` требует ровно одного из `resStar` или `auts` и отклоняет `eapPayload` с `400 INVALID_CONFIRMATION_PAYLOAD`.
+- `5g-aka-confirmation` отклоняет пустую JSON-нагрузку с `400 MANDATORY_IE_MISSING` и `detail="resStar or auts is required"`.
+- `eap-session` требует `eapPayload` и отклоняет `resStar` с `400 INVALID_CONFIRMATION_PAYLOAD`.
+- В текущем договоре разработки `eapPayload` для `EAP_AKA_PRIME` должен содержать `EAP-Response/AKA'-Challenge RES*=<xresStar>`; простое эхо запроса-вызова отклоняется.
+- `eap-session` также принимает минимальные триггеры `EAP-Response/AKA'-Synchronization-Failure AUTS=...`, `EAP-Response/AKA'-Reauthentication ...` и `EAP-Response/AKA'-Fast-Reauthentication ...` и отвечает `authResult=ONGOING` плюс обновлённой `eapSession` на тот же `authCtxId`.
+- Текущие причины сбоев, распространяемые из Java в Go: `SUBSCRIBER_NOT_FOUND`, `AUTHENTICATION_REJECTED`, `CONTEXT_NOT_FOUND` и `CONTROL_PLANE_UNAVAILABLE`.
+- Все ответы HTTP Go включают заголовки `X-Trace-Id` и `traceparent`. Логи запросов содержат тот же идентификатор трассировки в формате `trace_id=...`.
+- HTTP-клиент управляющего уровня Go теперь использует встроенный автоматический выключатель: повторяющиеся транспортные ошибки/5xx открывают выключатель, и последующие вызовы немедленно завершаются с `503 CONTROL_PLANE_UNAVAILABLE` до окончания окна ожидания.
 
-### Confirmed scenarios
+### Подтверждённые сценарии
 
-| Scenario | Evidence | Confirmed result |
+| Сценарий | Доказательство | Подтверждённый результат |
 | --- | --- | --- |
-| Base AUSF happy path on fresh compose startup | `python automation/scripts/smoke_test.py` | Service readiness, create challenge, and confirm success complete without an early `502` |
-| `5G_AKA` happy path with Namf callback | `python automation/scripts/smoke_test_http_udm.py` | Challenge and confirmation succeed; Namf callback is emitted |
-| `5G_AKA` synchronization-failure recovery path | `python automation/scripts/smoke_test_http_udm_sync_failure.py` | `5g-aka-confirmation` first returns `SYNC_FAILURE` with refreshed `5gAuthData`, persists `CHALLENGE_SENT`, emits no early Namf callback, then completes to `SUCCESS` with one Namf callback when confirmed with the refreshed `RES*` |
-| `EAP_AKA_PRIME` happy path with Namf callback | `python automation/scripts/smoke_test_http_udm_eap.py` | EAP challenge and confirmation succeed; Namf callback is emitted |
-| `EAP_AKA_PRIME` synchronization-failure ongoing path | `python automation/scripts/smoke_test_http_udm_eap_sync_failure.py` | `eap-session` returns `ONGOING` with a refreshed challenge, persists `CHALLENGE_SENT`, emits no early Namf callback, then completes to `SUCCESS` |
-| Repeated `EAP_AKA_PRIME` synchronization-failure ongoing path | `python automation/scripts/smoke_test_http_udm_eap_sync_failure_repeated.py` | `eap-session` accepts a second synchronization-failure response after the first refresh, returns a second `ONGOING` with a newly refreshed challenge, keeps the same `authCtxId` in `CHALLENGE_SENT`, emits no early Namf callback, and still completes to `SUCCESS` when later confirmed with the newest `RES*` |
-| `EAP_AKA_PRIME` re-authentication ongoing path | `python automation/scripts/smoke_test_http_udm_eap_reauthentication_ongoing.py` | `eap-session` returns `ONGOING` with a refreshed challenge, persists `CHALLENGE_SENT`, emits no early Namf callback, then completes to `SUCCESS` |
-| Repeated `EAP_AKA_PRIME` re-authentication ongoing path | `python automation/scripts/smoke_test_http_udm_eap_reauthentication_repeated.py` | `eap-session` accepts a second re-authentication response after the first refresh, returns a second `ONGOING` with a newly refreshed challenge, keeps the same `authCtxId` in `CHALLENGE_SENT`, emits no early Namf callback, and still completes to `SUCCESS` when later confirmed with the newest `RES*` |
-| `EAP_AKA_PRIME` fast re-authentication ongoing path | `python automation/scripts/smoke_test_http_udm_eap_fast_reauthentication_ongoing.py` | `eap-session` returns `ONGOING` with a refreshed challenge, persists `CHALLENGE_SENT`, emits no early Namf callback, then completes to `SUCCESS` |
-| Repeated `EAP_AKA_PRIME` fast re-authentication ongoing path | `python automation/scripts/smoke_test_http_udm_eap_fast_reauthentication_repeated.py` | `eap-session` accepts a second fast re-authentication response after the first refresh, returns a second `ONGOING` with a newly refreshed challenge, keeps the same `authCtxId` in `CHALLENGE_SENT`, emits no early Namf callback, and still completes to `SUCCESS` when later confirmed with the newest `RES*` |
-| `EAP_AKA_PRIME` stale response after repeated fast re-authentication refresh | `python automation/scripts/smoke_test_http_udm_eap_fast_reauthentication_repeated_stale_response.py` | `eap-session` accepts a second fast re-authentication response, but replaying the `RES*` captured after the first refresh returns `401 AUTHENTICATION_REJECTED`, persists `FAILED` with `EAP-Failure`, and emits no Namf callback |
-| `EAP_AKA_PRIME` stale response after repeated synchronization-failure refresh | `python automation/scripts/smoke_test_http_udm_eap_sync_failure_repeated_stale_response.py` | `eap-session` accepts a second synchronization-failure response, but replaying the `RES*` captured after the first refresh returns `401 AUTHENTICATION_REJECTED`, persists `FAILED` with `EAP-Failure`, and emits no Namf callback |
-| Invalid `notificationUri` negative path | `python automation/scripts/smoke_test_http_udm_invalid_notification_uri.py` | `400 INVALID_NOTIFICATION_URI`; no Namf callback |
-| Unsupported `authType` negative path | `python automation/scripts/smoke_test_http_udm_unsupported_auth_type.py` | `400 UNSUPPORTED_AUTH_TYPE`; no Namf callback |
-| Missing context negative path | `python automation/scripts/smoke_test_http_udm_missing_context.py` | `404 CONTEXT_NOT_FOUND`; no Namf callback |
-| Missing subscriber negative path | `python automation/scripts/smoke_test_http_udm_missing_subscriber.py` | `404 SUBSCRIBER_NOT_FOUND`; no Namf callback |
-| `5G_AKA` authentication rejection | `python automation/scripts/smoke_test_http_udm_authentication_rejected.py` | `401 AUTHENTICATION_REJECTED`; no Namf callback |
-| Invalid `AUTS` on initial `5G_AKA` challenge | `python automation/scripts/smoke_test_http_udm_invalid_auts.py` | `5g-aka-confirmation` rejects an invalid initial `AUTS` with `401 AUTHENTICATION_REJECTED` and `AUTS verification failed`, persists `FAILED`, and emits no Namf callback |
-| Empty `5G_AKA` confirmation payload | `python automation/scripts/smoke_test_http_udm_5g_aka_missing_confirmation_payload.py` | `5g-aka-confirmation` rejects an empty JSON payload with `400 MANDATORY_IE_MISSING`; the context remains `CHALLENGE_SENT`, emits no early Namf callback, and still completes to `SUCCESS` when later confirmed with the valid `RES*` |
-| `5G_AKA` confirmation with `eapPayload` | `python automation/scripts/smoke_test_http_udm_5g_aka_eap_payload_rejected.py` | `5g-aka-confirmation` rejects a payload containing `eapPayload` with `400 INVALID_CONFIRMATION_PAYLOAD`; the context remains `CHALLENGE_SENT`, emits no early Namf callback, and still completes to `SUCCESS` when later confirmed with the valid `RES*` |
-| Ambiguous `5G_AKA` confirmation payload | `python automation/scripts/smoke_test_http_udm_ambiguous_confirmation_payload.py` | `5g-aka-confirmation` rejects a payload containing both `resStar` and `auts` with `400 INVALID_CONFIRMATION_PAYLOAD`; the context remains `CHALLENGE_SENT`, emits no early Namf callback, and still completes to `SUCCESS` when later confirmed with the valid `RES*` |
-| Repeated `5G_AKA` confirmation after `FAILED` | `python automation/scripts/smoke_test_http_udm_repeat_confirm_after_failure.py` | Initial invalid confirmation returns `401 AUTHENTICATION_REJECTED`; repeated confirmation returns `401 AUTHENTICATION_REJECTED` with `authentication context is no longer pending` while the context remains `FAILED` |
-| Repeated `AUTS` confirmation after initial `5G_AKA` failure | `python automation/scripts/smoke_test_http_udm_repeat_auts_after_failure.py` | Initial invalid `AUTS` returns `401 AUTHENTICATION_REJECTED` with `AUTS verification failed`; replaying the same `AUTS` on the same `authCtxId` returns `401 AUTHENTICATION_REJECTED` with `authentication context is no longer pending` while the context remains `FAILED` |
-| `5G_AKA` synchronization-failure after success | `python automation/scripts/smoke_test_http_udm_sync_failure_after_success.py` | A refreshed `SYNC_FAILURE` challenge can still complete to `SUCCESS`, but any later valid refreshed `AUTS` on the same `authCtxId` returns `401 AUTHENTICATION_REJECTED` with `authentication context is no longer pending` while the context remains `AUTHENTICATED` |
-| `5G_AKA` confirmation after synchronization-failure success | `python automation/scripts/smoke_test_http_udm_repeat_confirm_after_sync_failure_success.py` | A refreshed `SYNC_FAILURE` challenge can still complete to `SUCCESS`, but any later valid refreshed `RES*` on the same `authCtxId` returns `401 AUTHENTICATION_REJECTED` with `authentication context is no longer pending` while the context remains `AUTHENTICATED` |
-| `5G_AKA` confirmation after synchronization-failure failure | `python automation/scripts/smoke_test_http_udm_repeat_confirm_after_sync_failure_failure.py` | A refreshed `SYNC_FAILURE` challenge first rejects the stale pre-refresh `AUTS` with `401 AUTHENTICATION_REJECTED`; any later valid refreshed `RES*` on the same `authCtxId` then returns `401 AUTHENTICATION_REJECTED` with `authentication context is no longer pending` while the context remains `FAILED` |
-| `5G_AKA` synchronization-failure after stale-response failure | `python automation/scripts/smoke_test_http_udm_sync_failure_after_failure.py` | A refreshed `SYNC_FAILURE` challenge first rejects the stale pre-refresh `RES*` with `401 AUTHENTICATION_REJECTED`; any later valid `AUTS` on the same `authCtxId` then returns `401 AUTHENTICATION_REJECTED` with `authentication context is no longer pending` while the context remains `FAILED` |
-| Repeated refreshed-valid `AUTS` after `5G_AKA SYNC_FAILURE` | `python automation/scripts/smoke_test_http_udm_sync_failure_repeated_valid_auts.py` | `5g-aka-confirmation` accepts a valid refreshed `AUTS` after the first `SYNC_FAILURE`, returns a second `SYNC_FAILURE` with a newly refreshed `5gAuthData`, keeps the context `CHALLENGE_SENT`, emits no early Namf callback, and still completes to `SUCCESS` when later confirmed with the newest `RES*` |
-| Third refreshed-valid `AUTS` after repeated `5G_AKA SYNC_FAILURE` | `python automation/scripts/smoke_test_http_udm_sync_failure_third_valid_auts.py` | `5g-aka-confirmation` accepts a third valid refreshed `AUTS` after two prior `SYNC_FAILURE` refreshes, returns a third `SYNC_FAILURE` with newly refreshed `5gAuthData`, keeps the same context `CHALLENGE_SENT`, emits no early Namf callback, and still completes to `SUCCESS` when later confirmed with the newest `RES*` |
-| Fourth refreshed-valid `AUTS` after repeated `5G_AKA SYNC_FAILURE` | `python automation/scripts/smoke_test_http_udm_sync_failure_fourth_valid_auts.py` | `5g-aka-confirmation` accepts a fourth valid refreshed `AUTS` after three prior `SYNC_FAILURE` refreshes, returns a fourth `SYNC_FAILURE` with newly refreshed `5gAuthData`, keeps the same context `CHALLENGE_SENT`, emits no early Namf callback, and still completes to `SUCCESS` when later confirmed with the newest `RES*` |
-| `5G_AKA` stale `AUTS` after fourth synchronization-failure refresh | `python automation/scripts/smoke_test_http_udm_sync_failure_fourth_stale_auts.py` | `5g-aka-confirmation` accepts a fourth valid refreshed `AUTS`, but replaying the `AUTS` captured after the third refresh returns `401 AUTHENTICATION_REJECTED` with `AUTS verification failed`, persists `FAILED`, and emits no Namf callback |
-| `5G_AKA` stale `AUTS` after third synchronization-failure refresh | `python automation/scripts/smoke_test_http_udm_sync_failure_third_stale_auts.py` | `5g-aka-confirmation` accepts a third valid refreshed `AUTS`, but replaying the `AUTS` captured after the second refresh returns `401 AUTHENTICATION_REJECTED` with `AUTS verification failed`, persists `FAILED`, and emits no Namf callback |
-| `5G_AKA` stale response after third synchronization-failure refresh | `python automation/scripts/smoke_test_http_udm_sync_failure_third_stale_response.py` | `5g-aka-confirmation` accepts a third valid refreshed `AUTS`, but replaying the `RES*` captured after the second refresh returns `401 AUTHENTICATION_REJECTED` with `RES* verification failed`, persists `FAILED`, and emits no Namf callback |
-| `5G_AKA` stale response after synchronization-failure refresh | `python automation/scripts/smoke_test_http_udm_sync_failure_stale_response.py` | `5g-aka-confirmation` first returns `SYNC_FAILURE` with refreshed `5gAuthData`; replaying the pre-refresh `RES*` returns `401 AUTHENTICATION_REJECTED`, persists `FAILED`, and emits no Namf callback |
-| `5G_AKA` stale `AUTS` after synchronization-failure refresh | `python automation/scripts/smoke_test_http_udm_sync_failure_stale_auts.py` | `5g-aka-confirmation` first returns `SYNC_FAILURE` with refreshed `5gAuthData`; replaying the pre-refresh `AUTS` returns `401 AUTHENTICATION_REJECTED` with `AUTS verification failed`, persists `FAILED`, and emits no Namf callback |
-| `5G_AKA` stale `AUTS` after repeated synchronization-failure refresh | `python automation/scripts/smoke_test_http_udm_sync_failure_repeated_stale_auts.py` | `5g-aka-confirmation` accepts a second valid refreshed `AUTS`, but replaying the `AUTS` captured after the first refresh returns `401 AUTHENTICATION_REJECTED` with `AUTS verification failed`, persists `FAILED`, and emits no Namf callback |
-| `5G_AKA` stale response after repeated synchronization-failure refresh | `python automation/scripts/smoke_test_http_udm_sync_failure_repeated_stale_response.py` | `5g-aka-confirmation` accepts a second valid refreshed `AUTS`, but replaying the `RES*` captured after the first refresh returns `401 AUTHENTICATION_REJECTED` with `RES* verification failed`, persists `FAILED`, and emits no Namf callback |
-| `EAP_AKA_PRIME` authentication rejection | `python automation/scripts/smoke_test_http_udm_eap_authentication_rejected.py` | `401 AUTHENTICATION_REJECTED`; no Namf callback |
-| Repeated `5G_AKA` confirmation after `SUCCESS` | `python automation/scripts/smoke_test_http_udm_repeat_confirm_after_success.py` | First confirmation succeeds and emits one Namf callback; repeated confirmation returns `401 AUTHENTICATION_REJECTED` with `authentication context is no longer pending` while the context remains `AUTHENTICATED` |
-| Repeated `AUTS` confirmation after `5G_AKA SUCCESS` | `python automation/scripts/smoke_test_http_udm_repeat_auts_after_success.py` | First confirmation succeeds and emits one Namf callback; replaying `AUTS` on the same `authCtxId` returns `401 AUTHENTICATION_REJECTED` with `authentication context is no longer pending` while the context remains `AUTHENTICATED` |
-| Repeated `EAP_AKA_PRIME` confirmation after `FAILED` | `python automation/scripts/smoke_test_http_udm_eap_repeat_confirm_after_failure.py` | Initial invalid EAP confirmation returns `401 AUTHENTICATION_REJECTED` with `EAP-Failure`; repeated confirmation returns `401 AUTHENTICATION_REJECTED` with `authentication context is no longer pending` while the context remains `FAILED` |
-| Repeated `EAP_AKA_PRIME` confirmation after `SUCCESS` | `python automation/scripts/smoke_test_http_udm_eap_repeat_confirm_after_success.py` | First EAP confirmation succeeds and emits one Namf callback; repeated confirmation on the same `authCtxId` returns `401 AUTHENTICATION_REJECTED` with `authentication context is no longer pending` while the context remains `AUTHENTICATED` |
-| `EAP_AKA_PRIME` synchronization-failure after `SUCCESS` | `python automation/scripts/smoke_test_http_udm_eap_sync_failure_after_success.py` | First synchronization-failure refresh returns `ONGOING`, confirmation with the refreshed `RES*` succeeds, and a later synchronization-failure on the same `authCtxId` returns `401 AUTHENTICATION_REJECTED` with `authentication context is no longer pending` while the context remains `AUTHENTICATED` |
-| `EAP_AKA_PRIME` synchronization-failure after `FAILED` | `python automation/scripts/smoke_test_http_udm_eap_sync_failure_after_failure.py` | First synchronization-failure refresh returns `ONGOING`, replaying the pre-refresh `RES*` returns `401 AUTHENTICATION_REJECTED` with `EAP-Failure`, and any later synchronization-failure on the same `authCtxId` returns `401 AUTHENTICATION_REJECTED` with `authentication context is no longer pending` while the context remains `FAILED` |
-| `EAP_AKA_PRIME` re-authentication after `SUCCESS` | `python automation/scripts/smoke_test_http_udm_eap_reauthentication_after_success.py` | First re-authentication refresh returns `ONGOING`, confirmation with the refreshed `RES*` succeeds, and a later re-authentication on the same `authCtxId` returns `401 AUTHENTICATION_REJECTED` with `authentication context is no longer pending` while the context remains `AUTHENTICATED` |
-| `EAP_AKA_PRIME` re-authentication after `FAILED` | `python automation/scripts/smoke_test_http_udm_eap_reauthentication_after_failure.py` | First re-authentication refresh returns `ONGOING`, replaying the pre-refresh `RES*` returns `401 AUTHENTICATION_REJECTED` with `EAP-Failure`, and any later re-authentication on the same `authCtxId` returns `401 AUTHENTICATION_REJECTED` with `authentication context is no longer pending` while the context remains `FAILED` |
-| `EAP_AKA_PRIME` fast re-authentication after `SUCCESS` | `python automation/scripts/smoke_test_http_udm_eap_fast_reauthentication_after_success.py` | First fast re-authentication refresh returns `ONGOING`, confirmation with the refreshed `RES*` succeeds, and a later fast re-authentication on the same `authCtxId` returns `401 AUTHENTICATION_REJECTED` with `authentication context is no longer pending` while the context remains `AUTHENTICATED` |
-| `EAP_AKA_PRIME` fast re-authentication after `FAILED` | `python automation/scripts/smoke_test_http_udm_eap_fast_reauthentication_after_failure.py` | First fast re-authentication refresh returns `ONGOING`, replaying the pre-refresh `RES*` returns `401 AUTHENTICATION_REJECTED` with `EAP-Failure`, and any later fast re-authentication on the same `authCtxId` returns `401 AUTHENTICATION_REJECTED` with `authentication context is no longer pending` while the context remains `FAILED` |
-| `EAP_AKA_PRIME` stale response after repeated re-authentication refresh | `python automation/scripts/smoke_test_http_udm_eap_reauthentication_repeated_stale_response.py` | `eap-session` accepts a second re-authentication response, but replaying the `RES*` captured after the first refresh returns `401 AUTHENTICATION_REJECTED`, persists `FAILED` with `EAP-Failure`, and emits no Namf callback |
-| `EAP_AKA_PRIME` stale response after fast re-authentication refresh | `python automation/scripts/smoke_test_http_udm_eap_fast_reauthentication_stale_response.py` | `eap-session` first returns `ONGOING` with a refreshed challenge; replaying the pre-refresh `RES*` returns `401 AUTHENTICATION_REJECTED`, persists `FAILED` with `EAP-Failure`, and emits no Namf callback |
-| `EAP_AKA_PRIME` stale response after re-authentication refresh | `python automation/scripts/smoke_test_http_udm_eap_reauthentication_stale_response.py` | `eap-session` first returns `ONGOING` with a refreshed challenge; replaying the pre-refresh `RES*` returns `401 AUTHENTICATION_REJECTED`, persists `FAILED` with `EAP-Failure`, and emits no Namf callback |
-| `EAP_AKA_PRIME` stale response after synchronization-failure refresh | `python automation/scripts/smoke_test_http_udm_eap_sync_failure_stale_response.py` | `eap-session` first returns `ONGOING` with a refreshed challenge; replaying the pre-refresh `RES*` returns `401 AUTHENTICATION_REJECTED`, persists `FAILED` with `EAP-Failure`, and emits no Namf callback |
-| Auth context survives Go service restart | `python automation/scripts/smoke_test_http_udm_context_survives_restart.py` | Challenge created, Go container restarted, confirmation succeeds using the file-backed context store |
-| Auth context TTL expiration | `python automation/scripts/smoke_test_http_udm_context_ttl_expired.py` | Challenge created with short TTL, wait for expiry, confirmation returns `404 CONTEXT_NOT_FOUND` |
-| Upstream UDM unavailable | `python automation/scripts/smoke_test_http_udm_upstream_unavailable.py` | Create request for `imsi-250010000000503` returns `502 CONTROL_PLANE_UNAVAILABLE` |
+| Базовый happy path AUSF при новом запуске compose | `python automation/scripts/smoke_test.py` | Готовность сервиса, создание вызова и успешное подтверждение завершаются без раннего `502` |
+| Happy path `5G_AKA` с Namf-обратным вызовом | `python automation/scripts/smoke_test_http_udm.py` | Вызов и подтверждение успешны; Namf-обратный вызов отправлен |
+| Путь восстановления после сбоя синхронизации `5G_AKA` | `python automation/scripts/smoke_test_http_udm_sync_failure.py` | `5g-aka-confirmation` сначала возвращает `SYNC_FAILURE` с обновлёнными `5gAuthData`, сохраняет `CHALLENGE_SENT`, не отправляет ранний Namf-обратный вызов, затем завершается с `SUCCESS` с одним Namf-обратным вызовом при подтверждении с обновлённым `RES*` |
+| Happy path `EAP_AKA_PRIME` с Namf-обратным вызовом | `python automation/scripts/smoke_test_http_udm_eap.py` | EAP-вызов и подтверждение успешны; Namf-обратный вызов отправлен |
+| Путь сбоя синхронизации `EAP_AKA_PRIME` (ongoing) | `python automation/scripts/smoke_test_http_udm_eap_sync_failure.py` | `eap-session` возвращает `ONGOING` с обновлённым вызовом, сохраняет `CHALLENGE_SENT`, не отправляет ранний Namf-обратный вызов, затем завершается с `SUCCESS` |
+| Повторный путь сбоя синхронизации `EAP_AKA_PRIME` (ongoing) | `python automation/scripts/smoke_test_http_udm_eap_sync_failure_repeated.py` | `eap-session` принимает второй ответ сбоя синхронизации после первого обновления, возвращает второй `ONGOING` с новым вызовом, сохраняет тот же `authCtxId` в `CHALLENGE_SENT`, не отправляет ранний Namf-обратный вызов и завершается с `SUCCESS` при подтверждении с новейшим `RES*` |
+| Путь повторной аутентификации `EAP_AKA_PRIME` (ongoing) | `python automation/scripts/smoke_test_http_udm_eap_reauthentication_ongoing.py` | `eap-session` возвращает `ONGOING` с обновлённым вызовом, сохраняет `CHALLENGE_SENT`, не отправляет ранний Namf-обратный вызов, затем завершается с `SUCCESS` |
+| Повторный путь повторной аутентификации `EAP_AKA_PRIME` (ongoing) | `python automation/scripts/smoke_test_http_udm_eap_reauthentication_repeated.py` | `eap-session` принимает второй ответ повторной аутентификации после первого обновления, возвращает второй `ONGOING` с новым вызовом, сохраняет тот же `authCtxId` в `CHALLENGE_SENT`, не отправляет ранний Namf-обратный вызов и завершается с `SUCCESS` при подтверждении с новейшим `RES*` |
+| Путь быстрой повторной аутентификации `EAP_AKA_PRIME` (ongoing) | `python automation/scripts/smoke_test_http_udm_eap_fast_reauthentication_ongoing.py` | `eap-session` возвращает `ONGOING` с обновлённым вызовом, сохраняет `CHALLENGE_SENT`, не отправляет ранний Namf-обратный вызов, затем завершается с `SUCCESS` |
+| Повторный путь быстрой повторной аутентификации `EAP_AKA_PRIME` (ongoing) | `python automation/scripts/smoke_test_http_udm_eap_fast_reauthentication_repeated.py` | `eap-session` принимает второй ответ быстрой повторной аутентификации после первого обновления, возвращает второй `ONGOING` с новым вызовом, сохраняет тот же `authCtxId` в `CHALLENGE_SENT`, не отправляет ранний Namf-обратный вызов и завершается с `SUCCESS` при подтверждении с новейшим `RES*` |
+| Устаревший ответ `EAP_AKA_PRIME` после повторного обновления быстрой повторной аутентификации | `python automation/scripts/smoke_test_http_udm_eap_fast_reauthentication_repeated_stale_response.py` | `eap-session` принимает второй ответ быстрой повторной аутентификации, но повторное использование `RES*` после первого обновления возвращает `401 AUTHENTICATION_REJECTED`, сохраняет `FAILED` с `EAP-Failure`, не отправляет Namf-обратный вызов |
+| Устаревший ответ `EAP_AKA_PRIME` после повторного обновления сбоя синхронизации | `python automation/scripts/smoke_test_http_udm_eap_sync_failure_repeated_stale_response.py` | `eap-session` принимает второй ответ сбоя синхронизации, но повторное использование `RES*` после первого обновления возвращает `401 AUTHENTICATION_REJECTED`, сохраняет `FAILED` с `EAP-Failure`, не отправляет Namf-обратный вызов |
+| Негативный путь: некорректный `notificationUri` | `python automation/scripts/smoke_test_http_udm_invalid_notification_uri.py` | `400 INVALID_NOTIFICATION_URI`; Namf-обратный вызов не отправлен |
+| Негативный путь: неподдерживаемый `authType` | `python automation/scripts/smoke_test_http_udm_unsupported_auth_type.py` | `400 UNSUPPORTED_AUTH_TYPE`; Namf-обратный вызов не отправлен |
+| Негативный путь: отсутствующий контекст | `python automation/scripts/smoke_test_http_udm_missing_context.py` | `404 CONTEXT_NOT_FOUND`; Namf-обратный вызов не отправлен |
+| Негативный путь: отсутствующий абонент | `python automation/scripts/smoke_test_http_udm_missing_subscriber.py` | `404 SUBSCRIBER_NOT_FOUND`; Namf-обратный вызов не отправлен |
+| Отклонение аутентификации `5G_AKA` | `python automation/scripts/smoke_test_http_udm_authentication_rejected.py` | `401 AUTHENTICATION_REJECTED`; Namf-обратный вызов не отправлен |
+| Недопустимый `AUTS` при первоначальном вызове `5G_AKA` | `python automation/scripts/smoke_test_http_udm_invalid_auts.py` | `5g-aka-confirmation` отклоняет недопустимый начальный `AUTS` с `401 AUTHENTICATION_REJECTED` и `AUTS verification failed`, сохраняет `FAILED`, не отправляет Namf-обратный вызов |
+| Пустая нагрузка подтверждения `5G_AKA` | `python automation/scripts/smoke_test_http_udm_5g_aka_missing_confirmation_payload.py` | `5g-aka-confirmation` отклоняет пустую JSON-нагрузку с `400 MANDATORY_IE_MISSING`; контекст остаётся в `CHALLENGE_SENT`, ранний Namf-обратный вызов не отправлен, и он завершается с `SUCCESS` при подтверждении с корректным `RES*` |
+| Подтверждение `5G_AKA` с `eapPayload` | `python automation/scripts/smoke_test_http_udm_5g_aka_eap_payload_rejected.py` | `5g-aka-confirmation` отклоняет нагрузку с `eapPayload` ответом `400 INVALID_CONFIRMATION_PAYLOAD`; контекст остаётся в `CHALLENGE_SENT` и завершается с `SUCCESS` при подтверждении с корректным `RES*` |
+| Неоднозначная нагрузка подтверждения `5G_AKA` | `python automation/scripts/smoke_test_http_udm_ambiguous_confirmation_payload.py` | `5g-aka-confirmation` отклоняет нагрузку с одновременным `resStar` и `auts` ответом `400 INVALID_CONFIRMATION_PAYLOAD`; контекст остаётся в `CHALLENGE_SENT` и завершается с `SUCCESS` при подтверждении с корректным `RES*` |
+| Повторное подтверждение `5G_AKA` после `FAILED` | `python automation/scripts/smoke_test_http_udm_repeat_confirm_after_failure.py` | Первоначальное недопустимое подтверждение возвращает `401 AUTHENTICATION_REJECTED`; повторное подтверждение возвращает `401 AUTHENTICATION_REJECTED` с `authentication context is no longer pending`, контекст остаётся в `FAILED` |
+| Повторный `AUTS` после начального сбоя `5G_AKA` | `python automation/scripts/smoke_test_http_udm_repeat_auts_after_failure.py` | Начальный недопустимый `AUTS` возвращает `401 AUTHENTICATION_REJECTED` с `AUTS verification failed`; повторное использование того же `AUTS` на том же `authCtxId` возвращает `401 AUTHENTICATION_REJECTED` с `authentication context is no longer pending`, контекст остаётся в `FAILED` |
+| Сбой синхронизации `5G_AKA` после успеха | `python automation/scripts/smoke_test_http_udm_sync_failure_after_success.py` | Обновлённый вызов `SYNC_FAILURE` может завершиться с `SUCCESS`, но любой последующий допустимый обновлённый `AUTS` на том же `authCtxId` возвращает `401 AUTHENTICATION_REJECTED` с `authentication context is no longer pending`, контекст остаётся в `AUTHENTICATED` |
+| Подтверждение `5G_AKA` после успешного сбоя синхронизации | `python automation/scripts/smoke_test_http_udm_repeat_confirm_after_sync_failure_success.py` | Обновлённый вызов `SYNC_FAILURE` может завершиться с `SUCCESS`, но любой последующий допустимый обновлённый `RES*` на том же `authCtxId` возвращает `401 AUTHENTICATION_REJECTED` с `authentication context is no longer pending`, контекст остаётся в `AUTHENTICATED` |
+| Подтверждение `5G_AKA` после неудачного сбоя синхронизации | `python automation/scripts/smoke_test_http_udm_repeat_confirm_after_sync_failure_failure.py` | Обновлённый вызов `SYNC_FAILURE` сначала отклоняет устаревший до-обновления `AUTS` с `401 AUTHENTICATION_REJECTED`; любой последующий допустимый обновлённый `RES*` на том же `authCtxId` возвращает `401 AUTHENTICATION_REJECTED` с `authentication context is no longer pending`, контекст остаётся в `FAILED` |
+| Сбой синхронизации `5G_AKA` после сбоя устаревшего ответа | `python automation/scripts/smoke_test_http_udm_sync_failure_after_failure.py` | Обновлённый вызов `SYNC_FAILURE` сначала отклоняет устаревший до-обновления `RES*` с `401 AUTHENTICATION_REJECTED`; любой последующий допустимый `AUTS` на том же `authCtxId` возвращает `401 AUTHENTICATION_REJECTED` с `authentication context is no longer pending`, контекст остаётся в `FAILED` |
+| Повторный допустимый обновлённый `AUTS` после `SYNC_FAILURE` в `5G_AKA` | `python automation/scripts/smoke_test_http_udm_sync_failure_repeated_valid_auts.py` | `5g-aka-confirmation` принимает допустимый обновлённый `AUTS` после первого `SYNC_FAILURE`, возвращает второй `SYNC_FAILURE` с новыми `5gAuthData`, сохраняет контекст в `CHALLENGE_SENT`, не отправляет ранний Namf-обратный вызов и завершается с `SUCCESS` при подтверждении с новейшим `RES*` |
+| Третий допустимый обновлённый `AUTS` после повторного `SYNC_FAILURE` в `5G_AKA` | `python automation/scripts/smoke_test_http_udm_sync_failure_third_valid_auts.py` | `5g-aka-confirmation` принимает третий допустимый обновлённый `AUTS` после двух предшествующих обновлений `SYNC_FAILURE`, возвращает третий `SYNC_FAILURE` с новыми `5gAuthData`, сохраняет тот же контекст в `CHALLENGE_SENT` и завершается с `SUCCESS` при подтверждении с новейшим `RES*` |
+| Четвёртый допустимый обновлённый `AUTS` после повторного `SYNC_FAILURE` в `5G_AKA` | `python automation/scripts/smoke_test_http_udm_sync_failure_fourth_valid_auts.py` | `5g-aka-confirmation` принимает четвёртый допустимый обновлённый `AUTS` после трёх предшествующих обновлений `SYNC_FAILURE`, возвращает четвёртый `SYNC_FAILURE` с новыми `5gAuthData`, сохраняет тот же контекст в `CHALLENGE_SENT` и завершается с `SUCCESS` при подтверждении с новейшим `RES*` |
+| Устаревший `AUTS` в `5G_AKA` после четвёртого обновления сбоя синхронизации | `python automation/scripts/smoke_test_http_udm_sync_failure_fourth_stale_auts.py` | `5g-aka-confirmation` принимает четвёртый допустимый обновлённый `AUTS`, но повторное использование `AUTS` после третьего обновления возвращает `401 AUTHENTICATION_REJECTED` с `AUTS verification failed`, сохраняет `FAILED`, не отправляет Namf-обратный вызов |
+| Устаревший `AUTS` в `5G_AKA` после третьего обновления сбоя синхронизации | `python automation/scripts/smoke_test_http_udm_sync_failure_third_stale_auts.py` | `5g-aka-confirmation` принимает третий допустимый обновлённый `AUTS`, но повторное использование `AUTS` после второго обновления возвращает `401 AUTHENTICATION_REJECTED` с `AUTS verification failed`, сохраняет `FAILED`, не отправляет Namf-обратный вызов |
+| Устаревший ответ в `5G_AKA` после третьего обновления сбоя синхронизации | `python automation/scripts/smoke_test_http_udm_sync_failure_third_stale_response.py` | `5g-aka-confirmation` принимает третий допустимый обновлённый `AUTS`, но повторное использование `RES*` после второго обновления возвращает `401 AUTHENTICATION_REJECTED` с `RES* verification failed`, сохраняет `FAILED`, не отправляет Namf-обратный вызов |
+| Устаревший ответ в `5G_AKA` после обновления сбоя синхронизации | `python automation/scripts/smoke_test_http_udm_sync_failure_stale_response.py` | `5g-aka-confirmation` сначала возвращает `SYNC_FAILURE` с обновлёнными `5gAuthData`; повторное использование до-обновления `RES*` возвращает `401 AUTHENTICATION_REJECTED`, сохраняет `FAILED`, не отправляет Namf-обратный вызов |
+| Устаревший `AUTS` в `5G_AKA` после обновления сбоя синхронизации | `python automation/scripts/smoke_test_http_udm_sync_failure_stale_auts.py` | `5g-aka-confirmation` сначала возвращает `SYNC_FAILURE` с обновлёнными `5gAuthData`; повторное использование до-обновления `AUTS` возвращает `401 AUTHENTICATION_REJECTED` с `AUTS verification failed`, сохраняет `FAILED`, не отправляет Namf-обратный вызов |
+| Устаревший `AUTS` в `5G_AKA` после повторного обновления сбоя синхронизации | `python automation/scripts/smoke_test_http_udm_sync_failure_repeated_stale_auts.py` | `5g-aka-confirmation` принимает второй допустимый обновлённый `AUTS`, но повторное использование `AUTS` после первого обновления возвращает `401 AUTHENTICATION_REJECTED` с `AUTS verification failed`, сохраняет `FAILED`, не отправляет Namf-обратный вызов |
+| Устаревший ответ в `5G_AKA` после повторного обновления сбоя синхронизации | `python automation/scripts/smoke_test_http_udm_sync_failure_repeated_stale_response.py` | `5g-aka-confirmation` принимает второй допустимый обновлённый `AUTS`, но повторное использование `RES*` после первого обновления возвращает `401 AUTHENTICATION_REJECTED` с `RES* verification failed`, сохраняет `FAILED`, не отправляет Namf-обратный вызов |
+| Отклонение аутентификации `EAP_AKA_PRIME` | `python automation/scripts/smoke_test_http_udm_eap_authentication_rejected.py` | `401 AUTHENTICATION_REJECTED`; Namf-обратный вызов не отправлен |
+| Повторное подтверждение `5G_AKA` после `SUCCESS` | `python automation/scripts/smoke_test_http_udm_repeat_confirm_after_success.py` | Первое подтверждение успешно, отправляет один Namf-обратный вызов; повторное подтверждение возвращает `401 AUTHENTICATION_REJECTED` с `authentication context is no longer pending`, контекст остаётся в `AUTHENTICATED` |
+| Повторный `AUTS` после `SUCCESS` в `5G_AKA` | `python automation/scripts/smoke_test_http_udm_repeat_auts_after_success.py` | Первое подтверждение успешно, отправляет один Namf-обратный вызов; повторное использование `AUTS` на том же `authCtxId` возвращает `401 AUTHENTICATION_REJECTED` с `authentication context is no longer pending`, контекст остаётся в `AUTHENTICATED` |
+| Повторное подтверждение `EAP_AKA_PRIME` после `FAILED` | `python automation/scripts/smoke_test_http_udm_eap_repeat_confirm_after_failure.py` | Начальное недопустимое EAP-подтверждение возвращает `401 AUTHENTICATION_REJECTED` с `EAP-Failure`; повторное подтверждение возвращает `401 AUTHENTICATION_REJECTED` с `authentication context is no longer pending`, контекст остаётся в `FAILED` |
+| Повторное подтверждение `EAP_AKA_PRIME` после `SUCCESS` | `python automation/scripts/smoke_test_http_udm_eap_repeat_confirm_after_success.py` | Первое EAP-подтверждение успешно, отправляет один Namf-обратный вызов; повторное подтверждение на том же `authCtxId` возвращает `401 AUTHENTICATION_REJECTED` с `authentication context is no longer pending`, контекст остаётся в `AUTHENTICATED` |
+| Сбой синхронизации `EAP_AKA_PRIME` после `SUCCESS` | `python automation/scripts/smoke_test_http_udm_eap_sync_failure_after_success.py` | Первое обновление при сбое синхронизации возвращает `ONGOING`, подтверждение с обновлённым `RES*` успешно, и любой последующий сбой синхронизации на том же `authCtxId` возвращает `401 AUTHENTICATION_REJECTED` с `authentication context is no longer pending`, контекст остаётся в `AUTHENTICATED` |
+| Сбой синхронизации `EAP_AKA_PRIME` после `FAILED` | `python automation/scripts/smoke_test_http_udm_eap_sync_failure_after_failure.py` | Первое обновление при сбое синхронизации возвращает `ONGOING`, повторное использование до-обновления `RES*` возвращает `401 AUTHENTICATION_REJECTED` с `EAP-Failure`, и любой последующий сбой синхронизации на том же `authCtxId` возвращает `401 AUTHENTICATION_REJECTED` с `authentication context is no longer pending`, контекст остаётся в `FAILED` |
+| Повторная аутентификация `EAP_AKA_PRIME` после `SUCCESS` | `python automation/scripts/smoke_test_http_udm_eap_reauthentication_after_success.py` | Первое обновление повторной аутентификации возвращает `ONGOING`, подтверждение с обновлённым `RES*` успешно, и любая последующая повторная аутентификация на том же `authCtxId` возвращает `401 AUTHENTICATION_REJECTED` с `authentication context is no longer pending`, контекст остаётся в `AUTHENTICATED` |
+| Повторная аутентификация `EAP_AKA_PRIME` после `FAILED` | `python automation/scripts/smoke_test_http_udm_eap_reauthentication_after_failure.py` | Первое обновление повторной аутентификации возвращает `ONGOING`, повторное использование до-обновления `RES*` возвращает `401 AUTHENTICATION_REJECTED` с `EAP-Failure`, и любая последующая повторная аутентификация на том же `authCtxId` возвращает `401 AUTHENTICATION_REJECTED` с `authentication context is no longer pending`, контекст остаётся в `FAILED` |
+| Быстрая повторная аутентификация `EAP_AKA_PRIME` после `SUCCESS` | `python automation/scripts/smoke_test_http_udm_eap_fast_reauthentication_after_success.py` | Первое обновление быстрой повторной аутентификации возвращает `ONGOING`, подтверждение с обновлённым `RES*` успешно, и любая последующая быстрая повторная аутентификация на том же `authCtxId` возвращает `401 AUTHENTICATION_REJECTED` с `authentication context is no longer pending`, контекст остаётся в `AUTHENTICATED` |
+| Быстрая повторная аутентификация `EAP_AKA_PRIME` после `FAILED` | `python automation/scripts/smoke_test_http_udm_eap_fast_reauthentication_after_failure.py` | Первое обновление быстрой повторной аутентификации возвращает `ONGOING`, повторное использование до-обновления `RES*` возвращает `401 AUTHENTICATION_REJECTED` с `EAP-Failure`, и любая последующая быстрая повторная аутентификация на том же `authCtxId` возвращает `401 AUTHENTICATION_REJECTED` с `authentication context is no longer pending`, контекст остаётся в `FAILED` |
+| Устаревший ответ `EAP_AKA_PRIME` после повторного обновления повторной аутентификации | `python automation/scripts/smoke_test_http_udm_eap_reauthentication_repeated_stale_response.py` | `eap-session` принимает второй ответ повторной аутентификации, но повторное использование `RES*` после первого обновления возвращает `401 AUTHENTICATION_REJECTED`, сохраняет `FAILED` с `EAP-Failure`, не отправляет Namf-обратный вызов |
+| Устаревший ответ `EAP_AKA_PRIME` после обновления быстрой повторной аутентификации | `python automation/scripts/smoke_test_http_udm_eap_fast_reauthentication_stale_response.py` | `eap-session` сначала возвращает `ONGOING` с обновлённым вызовом; повторное использование до-обновления `RES*` возвращает `401 AUTHENTICATION_REJECTED`, сохраняет `FAILED` с `EAP-Failure`, не отправляет Namf-обратный вызов |
+| Устаревший ответ `EAP_AKA_PRIME` после обновления повторной аутентификации | `python automation/scripts/smoke_test_http_udm_eap_reauthentication_stale_response.py` | `eap-session` сначала возвращает `ONGOING` с обновлённым вызовом; повторное использование до-обновления `RES*` возвращает `401 AUTHENTICATION_REJECTED`, сохраняет `FAILED` с `EAP-Failure`, не отправляет Namf-обратный вызов |
+| Устаревший ответ `EAP_AKA_PRIME` после обновления сбоя синхронизации | `python automation/scripts/smoke_test_http_udm_eap_sync_failure_stale_response.py` | `eap-session` сначала возвращает `ONGOING` с обновлённым вызовом; повторное использование до-обновления `RES*` возвращает `401 AUTHENTICATION_REJECTED`, сохраняет `FAILED` с `EAP-Failure`, не отправляет Namf-обратный вызов |
+| Контекст аутентификации переживает перезапуск сервиса Go | `python automation/scripts/smoke_test_http_udm_context_survives_restart.py` | Вызов создан, контейнер Go перезапущен, подтверждение успешно через файловое хранилище контекстов |
+| Истечение TTL контекста аутентификации | `python automation/scripts/smoke_test_http_udm_context_ttl_expired.py` | Вызов создан с коротким TTL, по истечении срока подтверждение возвращает `404 CONTEXT_NOT_FOUND` |
+| UDM-аплинк недоступен | `python automation/scripts/smoke_test_http_udm_upstream_unavailable.py` | Запрос создания для `imsi-250010000000503` возвращает `502 CONTROL_PLANE_UNAVAILABLE` |
 
-### Endpoint to validation matrix
+### Матрица эндпоинтов и валидации
 
-| Method and path | Focused unit coverage | Compose smoke coverage |
+| Метод и путь | Покрытие модульными тестами | Покрытие compose smoke-тестами |
 | --- | --- | --- |
-| `GET /healthz` | Python client tests cover the health client path | All smoke scripts gate on service health before continuing |
-| `POST /nausf-auth/v1/ue-authentications` | Go HTTP tests cover malformed JSON, mandatory fields, invalid `notificationUri`, unsupported `authType`, subscriber-not-found propagation, and control-plane unavailability | Happy-path create is covered by `smoke_test.py`, `smoke_test_http_udm.py`, and `smoke_test_http_udm_eap.py`; negative create failures are covered by `smoke_test_http_udm_invalid_notification_uri.py`, `smoke_test_http_udm_unsupported_auth_type.py`, and `smoke_test_http_udm_missing_subscriber.py` |
-| `GET /nausf-auth/v1/ue-authentications/{authCtxId}` | Go HTTP tests cover missing-context lookup and Go service tests cover in-memory lookup lifecycle | Context retrieval is exercised during the happy-path smoke flow before confirmation |
-| `POST /nausf-auth/v1/ue-authentications/{authCtxId}/5g-aka-confirmation` | Go HTTP tests cover invalid payload, missing context, authentication rejection, propagated control-plane not-found handling, and rejection of ambiguous `resStar` plus `auts` payloads; Go service tests cover rejection of non-pending contexts, repeated confirmation after `FAILED`, and stale `RES*` and stale `AUTS` after re-sync refresh | Happy-path confirmation is covered by `smoke_test.py` and `smoke_test_http_udm.py`; re-sync refresh and successful completion on the refreshed `RES*` are covered by `smoke_test_http_udm_sync_failure.py`; repeated refreshed-valid `AUTS` is covered by `smoke_test_http_udm_sync_failure_repeated_valid_auts.py`, `smoke_test_http_udm_sync_failure_third_valid_auts.py`, and `smoke_test_http_udm_sync_failure_fourth_valid_auts.py`; negative confirmation is covered by `smoke_test_http_udm_missing_context.py`, `smoke_test_http_udm_authentication_rejected.py`, `smoke_test_http_udm_invalid_auts.py`, `smoke_test_http_udm_5g_aka_missing_confirmation_payload.py`, `smoke_test_http_udm_5g_aka_eap_payload_rejected.py`, `smoke_test_http_udm_ambiguous_confirmation_payload.py`, `smoke_test_http_udm_repeat_confirm_after_success.py`, `smoke_test_http_udm_repeat_auts_after_success.py`, `smoke_test_http_udm_repeat_confirm_after_failure.py`, `smoke_test_http_udm_repeat_auts_after_failure.py`, `smoke_test_http_udm_sync_failure_after_success.py`, `smoke_test_http_udm_repeat_confirm_after_sync_failure_success.py`, `smoke_test_http_udm_repeat_confirm_after_sync_failure_failure.py`, `smoke_test_http_udm_sync_failure_after_failure.py`, `smoke_test_http_udm_sync_failure_stale_response.py`, `smoke_test_http_udm_sync_failure_stale_auts.py`, `smoke_test_http_udm_sync_failure_repeated_stale_auts.py`, `smoke_test_http_udm_sync_failure_repeated_stale_response.py`, `smoke_test_http_udm_sync_failure_third_stale_auts.py`, `smoke_test_http_udm_sync_failure_fourth_stale_auts.py`, and `smoke_test_http_udm_sync_failure_third_stale_response.py` |
-| `POST /nausf-auth/v1/ue-authentications/{authCtxId}/eap-session` | Go HTTP tests cover invalid payload routing plus refreshed-challenge `ONGOING` responses for synchronization-failure, re-authentication, and fast re-authentication; Go service tests cover explicit `EAP_AKA_PRIME` context initialization, the same ongoing branches, stale refreshed-challenge rejection, and rejection of non-pending contexts | Happy-path EAP confirmation is covered by `smoke_test_http_udm_eap.py`; `ONGOING` synchronization-failure, repeated synchronization-failure, re-auth, repeated re-auth, fast re-auth, and repeated fast re-auth branches are covered by `smoke_test_http_udm_eap_sync_failure.py`, `smoke_test_http_udm_eap_sync_failure_repeated.py`, `smoke_test_http_udm_eap_reauthentication_ongoing.py`, `smoke_test_http_udm_eap_reauthentication_repeated.py`, `smoke_test_http_udm_eap_fast_reauthentication_ongoing.py`, and `smoke_test_http_udm_eap_fast_reauthentication_repeated.py`; negative EAP confirmation is covered by `smoke_test_http_udm_eap_authentication_rejected.py`, `smoke_test_http_udm_eap_repeat_confirm_after_failure.py`, `smoke_test_http_udm_eap_repeat_confirm_after_success.py`, `smoke_test_http_udm_eap_sync_failure_after_success.py`, `smoke_test_http_udm_eap_sync_failure_after_failure.py`, `smoke_test_http_udm_eap_reauthentication_after_success.py`, `smoke_test_http_udm_eap_reauthentication_after_failure.py`, `smoke_test_http_udm_eap_fast_reauthentication_after_success.py`, `smoke_test_http_udm_eap_fast_reauthentication_after_failure.py`, `smoke_test_http_udm_eap_reauthentication_stale_response.py`, `smoke_test_http_udm_eap_reauthentication_repeated_stale_response.py`, `smoke_test_http_udm_eap_fast_reauthentication_stale_response.py`, `smoke_test_http_udm_eap_fast_reauthentication_repeated_stale_response.py`, `smoke_test_http_udm_eap_sync_failure_stale_response.py`, and `smoke_test_http_udm_eap_sync_failure_repeated_stale_response.py` |
-| `DELETE /nausf-auth/v1/ue-authentications/{authCtxId}` | Go HTTP tests cover missing-context delete and Go service tests cover delete-after-delete lifecycle behavior | Negative delete-after-missing-context is covered indirectly by the missing-context smoke flow cleanup path |
+| `GET /healthz` | Тесты Python-клиента покрывают путь клиента health | Все smoke-скрипты ожидают готовности сервиса перед продолжением |
+| `POST /nausf-auth/v1/ue-authentications` | Тесты HTTP Go охватывают некорректный JSON, обязательные поля, недопустимый `notificationUri`, неподдерживаемый `authType`, распространение ошибки "абонент не найден" и недоступность управляющего уровня | Happy-path создания покрыт `smoke_test.py`, `smoke_test_http_udm.py` и `smoke_test_http_udm_eap.py`; негативные ошибки создания — `smoke_test_http_udm_invalid_notification_uri.py`, `smoke_test_http_udm_unsupported_auth_type.py` и `smoke_test_http_udm_missing_subscriber.py` |
+| `GET /nausf-auth/v1/ue-authentications/{authCtxId}` | Тесты HTTP Go покрывают поиск несуществующего контекста; тесты сервиса Go — жизненный цикл поиска в памяти | Получение контекста выполняется в ходе happy-path smoke-потока перед подтверждением |
+| `POST /nausf-auth/v1/ue-authentications/{authCtxId}/5g-aka-confirmation` | Тесты HTTP Go покрывают недопустимую нагрузку, отсутствующий контекст, отклонение аутентификации, обработку ответа "не найдено" от управляющего уровня и отклонение неоднозначных нагрузок с одновременным `resStar` и `auts`; тесты сервиса Go — отклонение неотложных контекстов, повторное подтверждение после `FAILED`, устаревшие `RES*` и `AUTS` после повторной синхронизации | Happy-path подтверждения покрыт `smoke_test.py` и `smoke_test_http_udm.py`; обновление при повторной синхронизации — `smoke_test_http_udm_sync_failure.py`; повторные допустимые `AUTS` — `smoke_test_http_udm_sync_failure_repeated_valid_auts.py`, `smoke_test_http_udm_sync_failure_third_valid_auts.py` и `smoke_test_http_udm_sync_failure_fourth_valid_auts.py`; негативное подтверждение — `smoke_test_http_udm_missing_context.py`, `smoke_test_http_udm_authentication_rejected.py`, `smoke_test_http_udm_invalid_auts.py`, `smoke_test_http_udm_5g_aka_missing_confirmation_payload.py`, `smoke_test_http_udm_5g_aka_eap_payload_rejected.py`, `smoke_test_http_udm_ambiguous_confirmation_payload.py`, `smoke_test_http_udm_repeat_confirm_after_success.py`, `smoke_test_http_udm_repeat_auts_after_success.py`, `smoke_test_http_udm_repeat_confirm_after_failure.py`, `smoke_test_http_udm_repeat_auts_after_failure.py`, `smoke_test_http_udm_sync_failure_after_success.py`, `smoke_test_http_udm_repeat_confirm_after_sync_failure_success.py`, `smoke_test_http_udm_repeat_confirm_after_sync_failure_failure.py`, `smoke_test_http_udm_sync_failure_after_failure.py`, `smoke_test_http_udm_sync_failure_stale_response.py`, `smoke_test_http_udm_sync_failure_stale_auts.py`, `smoke_test_http_udm_sync_failure_repeated_stale_auts.py`, `smoke_test_http_udm_sync_failure_repeated_stale_response.py`, `smoke_test_http_udm_sync_failure_third_stale_auts.py`, `smoke_test_http_udm_sync_failure_fourth_stale_auts.py` и `smoke_test_http_udm_sync_failure_third_stale_response.py` |
+| `POST /nausf-auth/v1/ue-authentications/{authCtxId}/eap-session` | Тесты HTTP Go покрывают маршрутизацию недопустимой нагрузки и ответы `ONGOING` с обновлённым вызовом для сбоя синхронизации, повторной и быстрой повторной аутентификации; тесты сервиса Go — явную инициализацию контекста `EAP_AKA_PRIME`, те же ongoing-ветки, отклонение устаревших вызовов и отклонение неотложных контекстов | Happy-path EAP-подтверждения покрыт `smoke_test_http_udm_eap.py`; ветки `ONGOING` для сбоя синхронизации, повторного сбоя синхронизации, повторной, повторной повторной, быстрой повторной и повторной быстрой повторной аутентификации — `smoke_test_http_udm_eap_sync_failure.py`, `smoke_test_http_udm_eap_sync_failure_repeated.py`, `smoke_test_http_udm_eap_reauthentication_ongoing.py`, `smoke_test_http_udm_eap_reauthentication_repeated.py`, `smoke_test_http_udm_eap_fast_reauthentication_ongoing.py` и `smoke_test_http_udm_eap_fast_reauthentication_repeated.py`; негативное EAP-подтверждение — `smoke_test_http_udm_eap_authentication_rejected.py`, `smoke_test_http_udm_eap_repeat_confirm_after_failure.py`, `smoke_test_http_udm_eap_repeat_confirm_after_success.py`, `smoke_test_http_udm_eap_sync_failure_after_success.py`, `smoke_test_http_udm_eap_sync_failure_after_failure.py`, `smoke_test_http_udm_eap_reauthentication_after_success.py`, `smoke_test_http_udm_eap_reauthentication_after_failure.py`, `smoke_test_http_udm_eap_fast_reauthentication_after_success.py`, `smoke_test_http_udm_eap_fast_reauthentication_after_failure.py`, `smoke_test_http_udm_eap_reauthentication_stale_response.py`, `smoke_test_http_udm_eap_reauthentication_repeated_stale_response.py`, `smoke_test_http_udm_eap_fast_reauthentication_stale_response.py`, `smoke_test_http_udm_eap_fast_reauthentication_repeated_stale_response.py`, `smoke_test_http_udm_eap_sync_failure_stale_response.py` и `smoke_test_http_udm_eap_sync_failure_repeated_stale_response.py` |
+| `DELETE /nausf-auth/v1/ue-authentications/{authCtxId}` | Тесты HTTP Go покрывают удаление несуществующего контекста; тесты сервиса Go — поведение жизненного цикла при повторном удалении | Негативное удаление при отсутствующем контексте косвенно покрыто путём очистки в smoke-сценарии с отсутствующим контекстом |
 
-### Supporting validation
+### Поддерживающая валидация
 
-- `python -m unittest discover -s automation/tests` confirms Python client and helper behavior.
-- `go test ./internal/api ./internal/controlplane ./internal/namf ./internal/service` confirms the focused Go service, API, and control-plane adapter slices.
-- `mvn -q -Dtest=AuthenticationManagerTest,AuthenticationControllerTest,NnrfClientTest,HttpUdmClientTest test` confirms the focused Java control-plane slices.
-- `pwsh -File automation/scripts/run_pre_push_regression.ps1` is the current one-command reproducible pre-push run.
-- `.github/workflows/regression-suite.yml` runs the same validation flow on `push` and `pull_request` in GitHub Actions.
+- `python -m unittest discover -s automation/tests` подтверждает поведение Python-клиента и вспомогательных средств.
+- `go test ./internal/api ./internal/controlplane ./internal/namf ./internal/service` подтверждает сфокусированные срезы Go-сервиса, API и адаптера управляющего уровня.
+- `mvn -q -Dtest=AuthenticationManagerTest,AuthenticationControllerTest,NnrfClientTest,HttpUdmClientTest test` подтверждает сфокусированные срезы Java управляющего уровня.
+- `pwsh -File automation/scripts/run_pre_push_regression.ps1` — текущий одной командой воспроизводимый pre-push прогон регрессии.
+- `.github/workflows/regression-suite.yml` запускает тот же процесс валидации при `push` и `pull_request` в GitHub Actions.
 
-Important note:
+Важное замечание:
 
-- The Java control-plane now uses standards-backed Milenage and TUAK implementations for `RAND`, `AUTN`, `RES*`, `HXRES*`, `KAUSF`, and Milenage `AUTS` handling.
-- The broader AUSF behavior remains development-scoped: EAP payload formatting, subscriber seed data, and the overall AKA / EAP-AKA' state machines are not yet full production-grade interop implementations.
+- Управляющий уровень Java теперь использует реализации Milenage и TUAK, соответствующие стандартам, для обработки `RAND`, `AUTN`, `RES*`, `HXRES*`, `KAUSF` и Milenage `AUTS`.
+- Более широкое поведение AUSF остаётся в рамках разработки: форматирование EAP-нагрузок, данные абонентов и общие конечные автоматы AKA / EAP-AKA' ещё не являются полноценными производственными реализациями.
 
-## Project structure
+## Структура проекта
 
 ```text
 AUSF/
@@ -514,26 +514,26 @@ AUSF/
 └── README.md
 ```
 
-## How the layers fit together
+## Как уровни взаимодействуют
 
-- `networking/` is the place for PFCP or other transport-near protocol work.
-- `control-plane/` owns subscriber lookup, authentication vectors, EAP/AKA branching, and internal auth context state.
-- `microservices/` is the northbound AUSF SBI surface and now acts as an adapter over the Java control-plane.
-- `automation/` is the place for smoke tests, API validation, CI helpers, and deployment scripts.
+- `networking/` — место для работы с PFCP и другими транспортно-близкими протоколами.
+- `control-plane/` управляет поиском абонентов, векторами аутентификации, разветвлением EAP/AKA и внутренним состоянием контекста аутентификации.
+- `microservices/` — северный SBI-интерфейс AUSF и адаптер над управляющим уровнем Java.
+- `automation/` — место для дымовых тестов, валидации API, вспомогательных CI-средств и скриптов развёртывания.
 
-The control-plane now supports a pluggable UDM southbound integration mode:
+Управляющий уровень теперь поддерживает подключаемый режим интеграции с UDM на южном интерфейсе:
 
-- `mock` mode uses the local file-backed subscriber store and development vector generation.
-- `http` mode calls an external UDM-style endpoint and expects pre-generated authentication data.
+- Режим `mock` использует локальное файловое хранилище абонентов и генерацию векторов для разработки.
+- Режим `http` вызывает внешний UDM-совместимый эндпоинт и ожидает предварительно сгенерированные данные аутентификации.
 
-For southbound integration testing, the repository also provides lightweight mock network functions:
+Для тестирования интеграции на южном интерфейсе репозиторий также предоставляет лёгкие макеты сетевых функций:
 
-- `mock-udm` exposes a development `Nudm_UEAuthentication`-style HTTP endpoint.
-- `mock-nrf` exposes a development `Nnrf_NFDiscovery`-style HTTP endpoint that returns the `mock-udm` location.
+- `mock-udm` предоставляет HTTP-эндпоинт в стиле `Nudm_UEAuthentication` для разработки.
+- `mock-nrf` предоставляет HTTP-эндпоинт в стиле `Nnrf_NFDiscovery` для разработки, который возвращает адрес `mock-udm`.
 
-## Local development
+## Локальная разработка
 
-### C++ networking layer
+### Сетевой уровень C++
 
 ```bash
 cmake -S networking -B networking/build
@@ -541,7 +541,7 @@ cmake --build networking/build
 ./networking/build/Debug/networking_test.exe
 ```
 
-### Java control plane
+### Управляющий уровень Java
 
 ```bash
 cd control-plane
@@ -549,13 +549,13 @@ mvn test
 mvn spring-boot:run
 ```
 
-Internal Java endpoints:
+Внутренние Java-эндпоинты:
 
 - `POST /control-plane/v1/auth/initiate`
 - `POST /control-plane/v1/auth/{supi}/confirm`
 - `GET /control-plane/v1/auth/{supi}`
 
-### Go microservice
+### Микросервис Go
 
 ```bash
 cd microservices
@@ -564,7 +564,7 @@ go build ./...
 go run ./cmd/ausf
 ```
 
-### Python automation
+### Автоматизация Python
 
 ```bash
 cd automation
@@ -627,74 +627,74 @@ pwsh -File scripts/run_fast_validation.ps1
 pwsh -File scripts/run_pre_push_regression.ps1
 ```
 
-From the repository root, the shortest one-command validation entrypoint is:
+Наиболее короткий одной командой способ запустить валидацию из корня репозитория:
 
 ```bash
 make validate-fast
 ```
 
-`make validate-fast` is the canonical make entrypoint for local validation. On Windows, that target delegates to the PowerShell wrapper `automation/scripts/run_fast_validation.ps1`, so the same fast runner is used by both `make validate-fast` and direct PowerShell execution. The shared runner then executes the optimized full validation workflow in `automation/scripts/run_full_validation.py`. When host Maven is available, it reuses the fast path that packages the Java runtime JAR on the host, prebuilds the `ausf-control-plane` and `ausf-go` runtime images, and then runs both the HTTP UDM smoke suite and the HTTPS TLS smoke suite with `--skip-build`.
+`make validate-fast` — канонический make-точка входа для локальной валидации. В Windows этот таргет делегирует в PowerShell-обёртку `automation/scripts/run_fast_validation.ps1`, поэтому один и тот же быстрый запускатель используется как через `make validate-fast`, так и при прямом вызове PowerShell. Общий запускатель затем выполняет оптимизированный полный процесс валидации в `automation/scripts/run_full_validation.py`. При наличии host-Maven он использует быстрый путь: собирает JAR среды выполнения Java на хосте, предсобирает образы `ausf-control-plane` и `ausf-go`, а затем запускает HTTP UDM smoke-набор и HTTPS TLS smoke-набор с `--skip-build`.
 
-On Windows hosts where `make` is not available in `PATH`, use:
+На Windows-хостах, где `make` недоступен в `PATH`, используйте:
 
 ```powershell
 pwsh -File automation/scripts/run_fast_validation.ps1
 ```
 
-To keep using the root Makefile-style entrypoints without remembering which GNU Make binary is installed, use the repository wrapper:
+Чтобы использовать точки входа корневого Makefile без запоминания имени GNU Make, используйте обёртку репозитория:
 
 ```powershell
 .\make.ps1 validate-fast
 ```
 
-The wrapper resolves `make`, `gmake`, or `mingw32-make` from `PATH` and forwards the requested target unchanged.
+Обёртка находит `make`, `gmake` или `mingw32-make` из `PATH` и передаёт запрошенный таргет без изменений.
 
-If MSYS2 is installed, the same Makefile target can also be run through its GNU Make-compatible executable. On this Windows host, the HTTPS TLS target was validated with:
+При наличии MSYS2 тот же Makefile-таргет можно запустить через его GNU Make-совместимый исполняемый файл. На этом Windows-хосте HTTPS TLS-таргет был проверен командой:
 
 ```powershell
 mingw32-make https-tls-smoke-suite
 ```
 
-If you only need to rerun the compose-backed smoke suite after those images are already prepared, use:
+Если нужно повторно запустить только compose-backed smoke-набор после того, как образы уже подготовлены, используйте:
 
 ```bash
 python automation/scripts/run_http_udm_smoke_suite.py --skip-build
 ```
 
-If you want to validate the opt-in TLS wiring between the Go AUSF service and the Java control-plane, use:
+Для валидации опциональной TLS-проводки между сервисом AUSF Go и управляющим уровнем Java используйте:
 
 ```bash
 python automation/scripts/run_https_tls_smoke_suite.py
 ```
 
-That TLS suite generates a local self-signed dev CA and service certificates under `automation/.tls-dev/`, brings the stack up with `docker-compose.tls.yml`, runs HTTPS happy-path smoke coverage for both `5G_AKA` and `EAP_AKA_PRIME` against `https://ausf-go:8080`, verifies the Java control-plane health endpoint over `https://ausf-control-plane:8081`, and then tears the stack down.
+Этот TLS-набор генерирует локальный самоподписанный dev-CA и сертификаты сервисов в `automation/.tls-dev/`, поднимает стек с `docker-compose.tls.yml`, запускает HTTPS happy-path smoke-покрытие для `5G_AKA` и `EAP_AKA_PRIME` против `https://ausf-go:8080`, проверяет health-эндпоинт управляющего уровня Java по `https://ausf-control-plane:8081`, после чего останавливает стек.
 
-It also runs a negative TLS phase with `docker-compose.tls.invalid-control-plane-ca.yml`, intentionally gives the Go AUSF service the wrong CA for the Java control-plane, and asserts that authentication initiation fails with `CONTROL_PLANE_UNAVAILABLE` rather than silently falling back.
+Набор также запускает негативную TLS-фазу с `docker-compose.tls.invalid-control-plane-ca.yml`: намеренно выдаёт сервису AUSF Go неверный CA для управляющего уровня Java и проверяет, что инициация аутентификации завершается с `CONTROL_PLANE_UNAVAILABLE`, а не молчаливым откатом.
 
-If you only need the TTL-expiration verification (without the rest of the smoke matrix), use:
+Для проверки только истечения TTL (без остальной smoke-матрицы) используйте:
 
 ```bash
 make smoke-ttl-only
 ```
 
-`make smoke-ttl-only` rebuilds `ausf-go`, starts compose without extra rebuilds, runs `automation/scripts/smoke_test_http_udm_context_ttl_expired.py`, and then tears the stack down.
+`make smoke-ttl-only` пересобирает `ausf-go`, запускает compose без лишних пересборок, выполняет `automation/scripts/smoke_test_http_udm_context_ttl_expired.py` и затем останавливает стек.
 
-`make validate-all` remains available as a backward-compatible alias for the same full workflow.
+`make validate-all` по-прежнему доступен как обратно-совместимый псевдоним для того же полного рабочего процесса.
 
-The HTTP UDM smoke coverage is split by auth mode:
+HTTP UDM smoke-покрытие разделено по режимам аутентификации:
 
-- `python automation/scripts/smoke_test.py` validates the base AUSF happy path against a freshly started compose stack and now waits for service readiness before initiating authentication.
-- `python automation/scripts/smoke_test_http_udm.py` validates the `5G_AKA` flow and Namf callback path.
-- `python automation/scripts/smoke_test_http_udm_eap.py` validates the `EAP_AKA_PRIME` flow through the dedicated `eap-session` confirmation subresource and the same Namf callback path.
-- `python automation/scripts/smoke_test_http_udm_invalid_notification_uri.py` validates the negative create path, asserting `400` with `cause=INVALID_NOTIFICATION_URI` and no Namf callback for a relative `notificationUri`.
-- `python automation/scripts/smoke_test_http_udm_missing_context.py` validates the negative confirm path, asserting `404` with `cause=CONTEXT_NOT_FOUND` and no Namf callback for a missing `authCtxId`.
-- `python automation/scripts/smoke_test_http_udm_missing_subscriber.py` validates the negative initiate path, asserting `404` with `cause=SUBSCRIBER_NOT_FOUND` and no Namf callback for an unknown SUPI.
-- `python automation/scripts/smoke_test_http_udm_authentication_rejected.py` validates the negative confirm path, asserting `401` with `cause=AUTHENTICATION_REJECTED` and no Namf callback for an invalid `resStar`.
-- `python automation/scripts/smoke_test_http_udm_eap_authentication_rejected.py` validates the negative EAP confirm path, asserting `401` with `cause=AUTHENTICATION_REJECTED` and no Namf callback for an invalid `eapPayload`.
+- `python automation/scripts/smoke_test.py` — валидирует базовый happy path AUSF на только что запущенном compose-стеке и ожидает готовности сервиса перед инициацией аутентификации.
+- `python automation/scripts/smoke_test_http_udm.py` — валидирует поток `5G_AKA` и путь Namf-обратного вызова.
+- `python automation/scripts/smoke_test_http_udm_eap.py` — валидирует поток `EAP_AKA_PRIME` через выделенный под-ресурс подтверждения `eap-session` и тот же путь Namf-обратного вызова.
+- `python automation/scripts/smoke_test_http_udm_invalid_notification_uri.py` — валидирует негативный путь создания, проверяя `400` с `cause=INVALID_NOTIFICATION_URI` и отсутствие Namf-обратного вызова для относительного `notificationUri`.
+- `python automation/scripts/smoke_test_http_udm_missing_context.py` — валидирует негативный путь подтверждения, проверяя `404` с `cause=CONTEXT_NOT_FOUND` и отсутствие Namf-обратного вызова для несуществующего `authCtxId`.
+- `python automation/scripts/smoke_test_http_udm_missing_subscriber.py` — валидирует негативный путь инициации, проверяя `404` с `cause=SUBSCRIBER_NOT_FOUND` и отсутствие Namf-обратного вызова для неизвестного SUPI.
+- `python automation/scripts/smoke_test_http_udm_authentication_rejected.py` — валидирует негативный путь подтверждения, проверяя `401` с `cause=AUTHENTICATION_REJECTED` и отсутствие Namf-обратного вызова для недопустимого `resStar`.
+- `python automation/scripts/smoke_test_http_udm_eap_authentication_rejected.py` — валидирует негативный путь EAP-подтверждения, проверяя `401` с `cause=AUTHENTICATION_REJECTED` и отсутствие Namf-обратного вызова для недопустимого `eapPayload`.
 
-## Root orchestration
+## Корневая оркестрация
 
-The root `Makefile` provides a single entry point for common actions:
+Корневой `Makefile` предоставляет единую точку входа для типовых действий:
 
 ```bash
 make networking-build
@@ -709,68 +709,68 @@ make compose-up
 make compose-refresh-mocks
 ```
 
-If you work on Windows without `make`, use Git Bash, MSYS2, WSL, or run the equivalent commands manually. When MSYS2 is available, `mingw32-make` is the expected drop-in replacement for these root targets.
+В Windows без `make` используйте Git Bash, MSYS2, WSL или запускайте команды вручную. При наличии MSYS2 `mingw32-make` является ожидаемой заменой для этих корневых таргетов.
 
-For the bind-mounted Python mock services, a plain `docker compose up -d` does not restart an already running container, so code changes in `mock-amf` or `mock-nrf` may not be picked up immediately. Use `make compose-refresh-mocks` or run `pwsh -File automation/scripts/refresh_mock_services.ps1` to force a clean stop/remove/recreate cycle for those two services.
+Для bind-mounted Python-макетов сервисов простой `docker compose up -d` не перезапускает уже работающий контейнер, поэтому изменения кода в `mock-amf` или `mock-nrf` могут не быть применены немедленно. Используйте `make compose-refresh-mocks` или запустите `pwsh -File automation/scripts/refresh_mock_services.ps1`, чтобы выполнить принудительный цикл остановки/удаления/пересоздания для этих двух сервисов.
 
-To run the full HTTP UDM happy/negative validation set in one shot, use `make http-udm-smoke-suite` or `python automation/scripts/run_http_udm_smoke_suite.py`. The suite brings the compose stack up, runs three happy-path smoke scenarios (`smoke_test.py`, `smoke_test_http_udm.py`, `smoke_test_http_udm_eap.py`), then the negative HTTP UDM scenarios, and always tears the stack down at the end.
+Для запуска полного набора HTTP UDM happy/negative-валидации одной командой используйте `make http-udm-smoke-suite` или `python automation/scripts/run_http_udm_smoke_suite.py`. Набор поднимает compose-стек, запускает три happy-path smoke-сценария (`smoke_test.py`, `smoke_test_http_udm.py`, `smoke_test_http_udm_eap.py`), затем негативные HTTP UDM-сценарии и всегда останавливает стек в конце.
 
-To run the current minimal reproducible pre-push regression suite in one shot, use `make regression-suite`, `make validate-all`, `python automation/scripts/run_full_validation.py`, or `pwsh -File automation/scripts/run_pre_push_regression.ps1`. This wrapper runs Python unit tests, focused Go tests in the pinned Go devcontainer image, focused Java tests in the pinned Java 25 devcontainer image, then the full HTTP UDM happy/negative smoke suite, and finally the HTTPS TLS happy/negative smoke suite.
+Для запуска текущего минимального воспроизводимого pre-push регрессионного набора одной командой используйте `make regression-suite`, `make validate-all`, `python automation/scripts/run_full_validation.py` или `pwsh -File automation/scripts/run_pre_push_regression.ps1`. Эта обёртка запускает Python-юнит-тесты, сфокусированные Go-тесты в пинованном Go devcontainer-образе, сфокусированные Java-тесты в пинованном Java 25 devcontainer-образе, затем полный HTTP UDM happy/negative smoke-набор и наконец HTTPS TLS happy/negative smoke-набор.
 
 ## Docker Compose
 
-The repository includes `docker-compose.yml` for the Go AUSF service and Java control-plane service.
+Репозиторий содержит `docker-compose.yml` для сервиса AUSF Go и сервиса управляющего уровня Java.
 
-For local TLS validation, the repository also includes `docker-compose.tls.yml`, which overlays the base compose stack with a self-signed dev certificate bundle and enables HTTPS on the Go AUSF service and Java control-plane.
+Для локальной TLS-валидации репозиторий также включает `docker-compose.tls.yml`, который накладывается поверх базового compose-стека с bundle самоподписанных dev-сертификатов и включает HTTPS на сервисе AUSF Go и управляющем уровне Java.
 
-Start the stack:
+Запуск стека:
 
 ```bash
 docker compose up --build
 ```
 
-Services:
+Сервисы:
 
-- Go AUSF service: `http://localhost:8080`
-- Java control-plane service: `http://localhost:8081`
-- Mock UDM service: `http://localhost:8090`
-- Mock NRF service: `http://localhost:8091`
-- Mock AMF service: `http://localhost:8092`
+- Сервис AUSF Go: `http://localhost:8080`
+- Сервис управляющего уровня Java: `http://localhost:8081`
+- Сервис макета UDM: `http://localhost:8090`
+- Сервис макета NRF: `http://localhost:8091`
+- Сервис макета AMF: `http://localhost:8092`
 
-Important runtime variables:
+Важные переменные среды выполнения:
 
-- `CONTROL_PLANE_BASE_URL` tells Go where the Java control-plane lives.
-- `AUSF_SUBSCRIBER_STORE` tells Java where the persistent subscriber JSON file lives.
-- `AUSF_UDM_MODE` selects the UDM integration mode: `mock` or `http`.
-- `AUSF_UDM_BASE_URL` points the control-plane directly at an external UDM when `AUSF_UDM_MODE=http`.
-- `AUSF_NNRF_BASE_URL` points the control-plane at an external NRF discovery service when the UDM location should be resolved dynamically.
-- `AUSF_NAMF_BASE_URL` points the Go AUSF service at an AMF-facing status notification endpoint.
-- `AUSF_SBI_BEARER_TOKEN` (optional) enables inbound bearer-token authorization on the Go AUSF SBI routes under `/nausf-auth/v1/ue-authentications`.
-- `CONTROL_PLANE_BEARER_TOKEN` (optional) adds `Authorization: Bearer ...` on Go outbound calls to the Java control-plane.
-- `AUSF_NAMF_BEARER_TOKEN` (optional) adds `Authorization: Bearer ...` on Go outbound Namf status notifications.
-- `AUSF_TLS_CERT_FILE` and `AUSF_TLS_KEY_FILE` (optional) enable HTTPS on the Go AUSF service when both are set.
-- `CONTROL_PLANE_TLS_CA_CERT_FILE` (optional) adds a PEM CA bundle for the Go service when it connects to the Java control-plane over HTTPS.
-- `AUSF_NAMF_TLS_CA_CERT_FILE` (optional) adds a PEM CA bundle for Namf callback delivery over HTTPS.
-- `AUSF_AUTH_CONTEXT_STORE_FILE` (optional) sets the path to a JSON file where the Go AUSF service persists in-flight auth contexts. When set, contexts survive a container restart. When unset, contexts are stored in-memory only.
-- `AUSF_AUTH_CONTEXT_TTL_SECONDS` (optional, default unlimited) sets the TTL in seconds for auth contexts. Contexts older than this value are treated as expired and return `404 CONTEXT_NOT_FOUND`.
-- `AUSF_CONTROL_PLANE_BREAKER_FAILURES` (optional, default `5`) sets how many consecutive transport/5xx failures are required to open the Go control-plane circuit breaker.
-- `AUSF_CONTROL_PLANE_BREAKER_TIMEOUT_SECONDS` (optional, default `10`) sets how long the breaker stays open before it allows calls again.
-- `AUSF_SERVER_TLS_ENABLED`, `AUSF_SERVER_TLS_KEY_STORE`, `AUSF_SERVER_TLS_KEY_STORE_PASSWORD`, and `AUSF_SERVER_TLS_KEY_STORE_TYPE` configure HTTPS for the Java control-plane server.
-- `AUSF_TLS_CLIENT_CA_CERT_FILE` (optional) adds a PEM CA bundle for Java outbound HTTPS calls to NRF and UDM.
+- `CONTROL_PLANE_BASE_URL` — указывает Go, где находится управляющий уровень Java.
+- `AUSF_SUBSCRIBER_STORE` — указывает Java, где находится постоянный файл JSON абонентов.
+- `AUSF_UDM_MODE` — выбирает режим интеграции с UDM: `mock` или `http`.
+- `AUSF_UDM_BASE_URL` — направляет управляющий уровень напрямую к внешнему UDM при `AUSF_UDM_MODE=http`.
+- `AUSF_NNRF_BASE_URL` — направляет управляющий уровень к внешнему NRF-сервису обнаружения при динамическом определении адреса UDM.
+- `AUSF_NAMF_BASE_URL` — направляет сервис AUSF Go к AMF-эндпоинту уведомлений о статусе.
+- `AUSF_SBI_BEARER_TOKEN` (опционально) — включает входящую Bearer-токен-авторизацию на SBI-маршрутах Go под `/nausf-auth/v1/ue-authentications`.
+- `CONTROL_PLANE_BEARER_TOKEN` (опционально) — добавляет `Authorization: Bearer ...` к исходящим вызовам Go к управляющему уровню Java.
+- `AUSF_NAMF_BEARER_TOKEN` (опционально) — добавляет `Authorization: Bearer ...` к исходящим Namf-уведомлениям о статусе от Go.
+- `AUSF_TLS_CERT_FILE` и `AUSF_TLS_KEY_FILE` (опционально) — включают HTTPS на сервисе AUSF Go при задании обоих значений.
+- `CONTROL_PLANE_TLS_CA_CERT_FILE` (опционально) — добавляет PEM CA-bundle для сервиса Go при подключении к управляющему уровню Java по HTTPS.
+- `AUSF_NAMF_TLS_CA_CERT_FILE` (опционально) — добавляет PEM CA-bundle для доставки Namf-обратных вызовов по HTTPS.
+- `AUSF_AUTH_CONTEXT_STORE_FILE` (опционально) — задаёт путь к JSON-файлу, в котором сервис AUSF Go сохраняет активные контексты аутентификации. При установке контексты переживают перезапуск контейнера. При отсутствии контексты хранятся только в памяти.
+- `AUSF_AUTH_CONTEXT_TTL_SECONDS` (опционально, по умолчанию без ограничений) — задаёт TTL контекстов аутентификации в секундах. Контексты старше этого значения считаются истёкшими и возвращают `404 CONTEXT_NOT_FOUND`.
+- `AUSF_CONTROL_PLANE_BREAKER_FAILURES` (опционально, по умолчанию `5`) — задаёт количество последовательных транспортных ошибок/5xx для открытия автоматического выключателя управляющего уровня Go.
+- `AUSF_CONTROL_PLANE_BREAKER_TIMEOUT_SECONDS` (опционально, по умолчанию `10`) — задаёт, как долго выключатель остаётся открытым перед разрешением вызовов.
+- `AUSF_SERVER_TLS_ENABLED`, `AUSF_SERVER_TLS_KEY_STORE`, `AUSF_SERVER_TLS_KEY_STORE_PASSWORD` и `AUSF_SERVER_TLS_KEY_STORE_TYPE` — настраивают HTTPS для сервера управляющего уровня Java.
+- `AUSF_TLS_CLIENT_CA_CERT_FILE` (опционально) — добавляет PEM CA-bundle для исходящих HTTPS-вызовов Java к NRF и UDM.
 
-Observability endpoints and headers:
+Эндпоинты наблюдаемости и заголовки:
 
-- `GET /metrics` returns Prometheus-compatible metrics for request counts and latency.
-- `X-Trace-Id` is returned on every Go API response.
-- `traceparent` is returned on every Go API response and accepted on incoming requests.
+- `GET /metrics` возвращает Prometheus-совместимые метрики для счётчиков запросов и задержек.
+- `X-Trace-Id` возвращается в каждом ответе Go API.
+- `traceparent` возвращается в каждом ответе Go API и принимается во входящих запросах.
 
-When `notificationUri` is provided on the create request, the Go AUSF service uses that per-session callback template in preference to the global `AUSF_NAMF_BASE_URL`. The `{authCtxId}` placeholder is replaced with the generated authentication context identifier before the Namf callback is sent.
+Когда `notificationUri` указан в запросе создания, сервис AUSF Go использует этот per-session шаблон обратного вызова вместо глобального `AUSF_NAMF_BASE_URL`. Заполнитель `{authCtxId}` заменяется сгенерированным идентификатором контекста аутентификации перед отправкой Namf-обратного вызова.
 
-When `AUSF_NNRF_BASE_URL` is set and `AUSF_UDM_BASE_URL` is empty, the control-plane first calls:
+Когда установлен `AUSF_NNRF_BASE_URL` и `AUSF_UDM_BASE_URL` пуст, управляющий уровень сначала вызывает:
 
 - `GET /nnrf-disc/v1/nf-instances?target-nf-type=UDM&requester-nf-type=AUSF`
 
-Expected NRF response body:
+Ожидаемое тело ответа NRF:
 
 ```json
 {
@@ -787,11 +787,11 @@ Expected NRF response body:
 }
 ```
 
-When `AUSF_UDM_MODE=http`, the control-plane calls:
+При `AUSF_UDM_MODE=http` управляющий уровень вызывает:
 
 - `POST /nudm-ueau/v1/{supi}/security-information/generate-auth-data`
 
-Expected request body:
+Ожидаемое тело запроса:
 
 ```json
 {
@@ -800,11 +800,11 @@ Expected request body:
 }
 ```
 
-When `AUSF_NAMF_BASE_URL` is set, the Go AUSF service sends a southbound notification after successful confirmation:
+Когда установлен `AUSF_NAMF_BASE_URL`, сервис AUSF Go отправляет южное уведомление после успешного подтверждения:
 
 - `POST /namf-comm/v1/ue-authentications/{authCtxId}/status-notify`
 
-Expected request body:
+Ожидаемое тело запроса:
 
 ```json
 {
@@ -817,7 +817,7 @@ Expected request body:
 }
 ```
 
-Expected response body:
+Ожидаемое тело ответа:
 
 ```json
 {
@@ -833,77 +833,77 @@ Expected response body:
 }
 ```
 
-## Known limitations
+## Известные ограничения
 
-This workspace is intentionally a development foundation. The following limitations are currently known and accepted:
+Данное рабочее пространство намеренно является основой для разработки. Следующие ограничения в настоящее время известны и приняты:
 
-- Real Nnrf / Namf interactions.
-- Production-grade Nudm interoperability beyond the current pluggable mock/http development contract.
-- Production-grade PostgreSQL operations such as HA, migrations, backup/restore, and secret-managed credentials.
-- Mutual TLS, certificate rotation, OAuth2, and full SBI authorization hardening.
-- Full 5G AKA and EAP-AKA' state machines.
-- Real PFCP data plane integration.
-- Circuit breaking and tracing between Go and Java services.
+- Реальные взаимодействия Nnrf / Namf.
+- Производственная совместимость с Nudm, выходящая за рамки текущего подключаемого контракта mock/http для разработки.
+- Производственные операции PostgreSQL: HA, миграции, резервное копирование/восстановление и credentials через secret-менеджер.
+- Mutual TLS, ротация сертификатов, OAuth2 и полное усиление авторизации SBI.
+- Полные конечные автоматы 5G AKA и EAP-AKA'.
+- Реальная интеграция с плоскостью данных PFCP.
+- Автоматические выключатели и трассировка между сервисами Go и Java.
 
-## Validation coverage
+## Покрытие валидации
 
-Operational scenarios are listed in the `Operational contract` section above. Additional coverage confirmed in the current environment:
+Операционные сценарии перечислены в разделе `Операционный контракт` выше. Дополнительное покрытие, подтверждённое в текущей среде:
 
-- C++ networking layer builds and its sample executable runs.
-- Focused Go tests pass in a containerized Go toolchain, including `./internal/api`, `./internal/controlplane`, `./internal/namf`, and `./internal/service`.
-- Focused Java tests pass in a containerized Java/Maven toolchain, including `AuthenticationManagerTest`, `AuthenticationControllerTest`, `NnrfClientTest`, `HttpUdmClientTest`, `MilenageTest`, `TuakTest`, `UdmServiceTest`, and the subscriber persistence slice.
-- Focused TLS transport tests pass for the Go AUSF client/server wiring and for the Java UDM/NRF client slice.
-- `python automation/scripts/run_https_tls_smoke_suite.py` validates the compose-backed HTTPS happy paths end-to-end for both `5G_AKA` and `EAP_AKA_PRIME` and also checks the negative wrong-CA path that must fail with `CONTROL_PLANE_UNAVAILABLE`.
-- `python automation/scripts/smoke_test_http_udm_authorization.py` validates opt-in bearer authorization in compose: create without token fails with `401 UNAUTHORIZED`, while the same flow succeeds with the configured bearer token.
-- Python automation unit tests pass.
-- IDE diagnostics for the edited Go and Java sources are clean.
-- Docker Compose stack with `mock-nrf`, `mock-udm`, and `mock-amf` starts successfully.
-- The compose-backed HTTP UDM suite now runs against a PostgreSQL-backed control-plane runtime and completes successfully end-to-end.
-- Auth context TTL expiration smoke validated end-to-end: context created, TTL elapsed, confirmation returns `404 CONTEXT_NOT_FOUND`.
-- Auth context file-backed persistence smoke validated: context survives a Go container restart, confirmation succeeds after restart.
-- Upstream-unavailable smoke validated: `imsi-250010000000503` triggers `502 CONTROL_PLANE_UNAVAILABLE` via `MOCK_UDM_UNAVAILABLE_SUPIS`.
-- `python automation/scripts/run_http_udm_smoke_suite.py` runs the full HTTP UDM happy/negative smoke suite and cleans the compose stack up afterward.
-- `python automation/scripts/run_full_validation.py` runs the current CI-friendly validation stack end-to-end: Python unit tests, focused Go tests, focused Java tests, and the HTTP UDM smoke suite.
-- `pwsh -File automation/scripts/run_pre_push_regression.ps1` runs the same suite through the Windows-oriented helper wrapper.
-- `.github/workflows/regression-suite.yml` enforces the same `validate` job on every `push` and `pull_request`. The `main` branch is protected: merging requires one approved review, resolved conversations, and a passing `validate` status check.
+- Сетевой уровень C++ собирается, и пример исполняемого файла запускается.
+- Сфокусированные Go-тесты проходят в контейнерном инструментарии Go, включая `./internal/api`, `./internal/controlplane`, `./internal/namf` и `./internal/service`.
+- Сфокусированные Java-тесты проходят в контейнерном инструментарии Java/Maven, включая `AuthenticationManagerTest`, `AuthenticationControllerTest`, `NnrfClientTest`, `HttpUdmClientTest`, `MilenageTest`, `TuakTest`, `UdmServiceTest` и срез постоянного хранилища абонентов.
+- Сфокусированные TLS-транспортные тесты проходят для проводки клиент/сервер AUSF Go и для среза клиентов UDM/NRF Java.
+- `python automation/scripts/run_https_tls_smoke_suite.py` валидирует compose-backed HTTPS happy paths end-to-end для `5G_AKA` и `EAP_AKA_PRIME` и также проверяет негативный путь с неверным CA, который должен завершиться с `CONTROL_PLANE_UNAVAILABLE`.
+- `python automation/scripts/smoke_test_http_udm_authorization.py` валидирует опциональную Bearer-авторизацию в compose: создание без токена завершается с `401 UNAUTHORIZED`, а тот же поток с корректным Bearer-токеном — успешно.
+- Python-юнит-тесты автоматизации проходят.
+- Диагностика IDE для отредактированных Go- и Java-источников чистая.
+- Docker Compose-стек с `mock-nrf`, `mock-udm` и `mock-amf` запускается успешно.
+- Compose-backed HTTP UDM-набор теперь работает против PostgreSQL-backed среды выполнения управляющего уровня и завершается успешно end-to-end.
+- Smoke-тест истечения TTL контекста аутентификации подтверждён end-to-end: контекст создан, TTL истёк, подтверждение возвращает `404 CONTEXT_NOT_FOUND`.
+- Smoke-тест файлового сохранения контекста аутентификации подтверждён: контекст переживает перезапуск контейнера Go, подтверждение успешно после перезапуска.
+- Smoke-тест недоступного аплинка подтверждён: `imsi-250010000000503` вызывает `502 CONTROL_PLANE_UNAVAILABLE` через `MOCK_UDM_UNAVAILABLE_SUPIS`.
+- `python automation/scripts/run_http_udm_smoke_suite.py` запускает полный HTTP UDM happy/negative smoke-набор и очищает compose-стек после завершения.
+- `python automation/scripts/run_full_validation.py` запускает текущий CI-совместимый стек валидации end-to-end: Python-юнит-тесты, сфокусированные Go-тесты, сфокусированные Java-тесты и HTTP UDM smoke-набор.
+- `pwsh -File automation/scripts/run_pre_push_regression.ps1` запускает тот же набор через Windows-ориентированную вспомогательную обёртку.
+- `.github/workflows/regression-suite.yml` применяет тот же `validate`-джоб при каждом `push` и `pull_request`. Ветка `main` защищена: слияние требует одного одобренного ревью, разрешённых обсуждений и прохождения статус-проверки `validate`.
 
-Not fully validated in the current environment:
+Не полностью подтверждено в текущей среде:
 
-- Full end-to-end validation of every branch and failure mode has not been run.
-- Host-native `go` and `mvn` commands were not used directly; validation was performed through containerized toolchains.
+- Полная end-to-end валидация каждой ветки и режима сбоя не была выполнена.
+- Нативные host-команды `go` и `mvn` не использовались напрямую; валидация выполнялась через контейнерные инструментарии.
 
-## Roadmap
+## Дорожная карта
 
-The backlog below is ordered by priority. Items are grouped into three horizons.
+Бэклог ниже упорядочен по приоритету. Элементы сгруппированы по трём горизонтам.
 
-### Horizon 1 — correctness and production-readiness (next sprint)
+### Горизонт 1 — корректность и производственная готовность (следующий спринт)
 
-| # | Item | Layer | Why |
-|---|------|-------|-----|
-| 1 | ~~Replace development crypto with real Milenage/TUAK~~ | Java control-plane | ✅ Implemented: `UdmService` now issues Milenage/TUAK-backed vectors, Milenage `AUTS` resynchronization is wired for `5G_AKA`, and reference-vector tests cover both algorithms |
-| 2 | ~~Replace embedded H2 subscriber storage with production-grade durable persistence (e.g. PostgreSQL)~~ | Java control-plane | ✅ Implemented: runtime subscriber persistence now uses PostgreSQL-backed JPA configuration plus Java seeding instead of H2-specific `data.sql` |
-| 3 | ~~Add TLS between services and toward external NFs~~ | Go + Java | ✅ Implemented as opt-in HTTPS/TLS for Go server, Go outbound control-plane/Namf clients, Java control-plane server, and Java outbound UDM/NRF clients via env-configured cert/key and CA bundle settings |
-| 4 | ~~Add OAuth2/token-based SBI authorization~~ | Go microservice | ✅ Implemented as opt-in bearer-token authorization on inbound Go SBI routes plus outbound bearer-token propagation from Go to the Java control-plane and Namf clients via env-configured tokens |
-| 5 | Implement full 5G AKA state machine (including SYNC\_FAILURE and re-sync) | Go + Java | Minimal `AUTS -> SYNC_FAILURE -> refreshed challenge` flow is now implemented; the remaining gap is broader spec-complete state handling and failure coverage |
-| 6 | Implement full EAP-AKA' state machine (EAP-Failure, sync-failure, re-auth, fast re-auth) | Go + Java | Minimal EAP failure propagation, synchronization-failure, re-authentication, and fast re-authentication refresh flows are implemented; the remaining gap is broader spec-complete state semantics rather than absence of these branches |
+| # | Элемент | Уровень | Причина |
+|---|---------|---------|---------|
+| 1 | ~~Заменить crypto разработки реальными Milenage/TUAK~~ | Java управляющий уровень | ✅ Реализовано: `UdmService` теперь выдаёт векторы на основе Milenage/TUAK, ресинхронизация Milenage `AUTS` подключена для `5G_AKA`, и тесты с эталонными векторами покрывают оба алгоритма |
+| 2 | ~~Заменить встроенное хранилище H2 абонентов производственным надёжным хранилищем (PostgreSQL)~~ | Java управляющий уровень | ✅ Реализовано: постоянное хранилище абонентов теперь использует PostgreSQL-backed JPA с Java-сидированием вместо H2-специфичного `data.sql` |
+| 3 | ~~Добавить TLS между сервисами и к внешним NF~~ | Go + Java | ✅ Реализовано как опциональный HTTPS/TLS для сервера Go, исходящих клиентов Go (управляющий уровень/Namf), сервера Java управляющего уровня и исходящих клиентов Java (UDM/NRF) через конфигурируемые cert/key и CA bundle |
+| 4 | ~~Добавить OAuth2/token-based SBI-авторизацию~~ | Go микросервис | ✅ Реализовано как опциональная Bearer-токен-авторизация на входящих SBI-маршрутах Go и исходящее Bearer-токен-распространение от Go к управляющему уровню Java и клиентам Namf |
+| 5 | Реализовать полный конечный автомат 5G AKA (включая SYNC\_FAILURE и повторную синхронизацию) | Go + Java | Минимальный поток `AUTS -> SYNC_FAILURE -> refreshed challenge` реализован; оставшийся разрыв — более широкая spec-полная обработка состояний и покрытие сбоев |
+| 6 | Реализовать полный конечный автомат EAP-AKA' (EAP-Failure, sync-failure, re-auth, fast re-auth) | Go + Java | Минимальные потоки распространения EAP-ошибок, сбоя синхронизации, повторной и быстрой повторной аутентификации реализованы; оставшийся разрыв — более широкая spec-полная семантика состояний |
 
-### Horizon 2 — resilience and observability (following sprint)
+### Горизонт 2 — отказоустойчивость и наблюдаемость (следующий спринт)
 
-| # | Item | Layer | Why |
-|---|------|-------|-----|
-| 7 | Add circuit breaker between Go↔Java and Java↔UDM | Go + Java | ✅ Go↔Java implemented; ✅ Java↔UDM `UdmCircuitBreaker` implemented (configurable via `AUSF_UDM_BREAKER_FAILURES` / `AUSF_UDM_BREAKER_OPEN_SECONDS`) |
-| 8 | ✅ Add distributed tracing (OpenTelemetry) | Go + Java | Correlate requests across the three-service boundary for debugging and SLA monitoring |
-| 9 | ~~Expand `/metrics` coverage~~ | Go microservice | ✅ Implemented: `ausf_auth_initiated_total`, `ausf_auth_confirmed_total`, `ausf_auth_failed_total` by auth type/cause alongside HTTP metrics |
-| 10 | ~~Add structured JSON logging with trace-ID propagation~~ | Go microservice | ✅ Implemented: all log lines are machine-parseable JSON `{"time","level","trace_id","msg",...}` |
-| 11 | ~~Harden auth context TTL: persist TTL metadata across restarts~~ | Go microservice | ✅ Implemented: `CreatedAt` is persisted in the JSON file store; zero-timestamp legacy contexts are treated as expired when TTL is enabled |
+| # | Элемент | Уровень | Причина |
+|---|---------|---------|---------|
+| 7 | Добавить автоматический выключатель между Go↔Java и Java↔UDM | Go + Java | ✅ Go↔Java реализован; ✅ Java↔UDM `UdmCircuitBreaker` реализован (конфигурируется через `AUSF_UDM_BREAKER_FAILURES` / `AUSF_UDM_BREAKER_OPEN_SECONDS`) |
+| 8 | ✅ Добавить распределённую трассировку (OpenTelemetry) | Go + Java | Корреляция запросов через трёхсервисную границу для отладки и мониторинга SLA |
+| 9 | ~~Расширить покрытие `/metrics`~~ | Go микросервис | ✅ Реализовано: `ausf_auth_initiated_total`, `ausf_auth_confirmed_total`, `ausf_auth_failed_total` по типу аутентификации/причине наряду с HTTP-метриками |
+| 10 | ~~Добавить структурированное JSON-логирование с распространением trace-ID~~ | Go микросервис | ✅ Реализовано: все строки логов — машиночитаемый JSON `{"time","level","trace_id","msg",...}` |
+| 11 | ~~Усилить TTL контекста аутентификации: сохранять TTL-метаданные при перезапусках~~ | Go микросервис | ✅ Реализовано: `CreatedAt` сохраняется в JSON-файловом хранилище; контексты с нулевым временем создания считаются истёкшими при включённом TTL |
 
-### Horizon 3 — integration and deployment
+### Горизонт 3 — интеграция и развёртывание
 
-| # | Item | Layer | Why |
-|---|------|-------|-----|
-| 12 | ~~Production-grade NRF integration: heartbeat registration, NF profile, subscription-based UDM discovery~~ | Java control-plane | ✅ Implemented: `NrfLifecycleManager` registers on startup via `PUT /nnrf-nfm/v1/nf-instances/{id}`, sends periodic heartbeats (`PATCH`), and deregisters on shutdown (`DELETE`). Configurable via `AUSF_NNRF_NF_INSTANCE_ID`, `AUSF_NNRF_HEARTBEAT_INTERVAL` (default 30 s) |
-| 13 | Production-grade Nudm interoperability (full `Nudm_UEAuthentication` contract) | Java control-plane | Current mock UDM contract is simplified; real UDM response shapes differ |
-| 14 | Real PFCP data plane integration in the C++ networking layer | C++ | Current PFCP code is a stub; connecting it to the authentication result flow closes the user-plane loop |
-| 15 | ~~Kubernetes/Helm deployment manifests with readiness/liveness probes~~ | Infrastructure | ✅ Implemented: Helm chart at `deploy/helm/ausf/` — Go microservice + Java control-plane Deployments/Services, optional mock NFs (`mocks.enabled`), PVC for auth-context store, liveness/readiness probes, non-root security contexts |
-| 16 | Load and soak testing with realistic SUPI populations | Automation | Verify throughput, TTL under concurrent load, and file-store write performance |
-| 17 | ✅ Devcontainer-based one-click local setup | Infrastructure | Remove dependency on pre-installed Docker/Maven/Go versions on developer machines |
+| # | Элемент | Уровень | Причина |
+|---|---------|---------|---------|
+| 12 | ~~Производственная интеграция с NRF: heartbeat-регистрация, NF-профиль, discovery UDM по подписке~~ | Java управляющий уровень | ✅ Реализовано: `NrfLifecycleManager` регистрируется при запуске через `PUT /nnrf-nfm/v1/nf-instances/{id}`, отправляет периодические heartbeats (`PATCH`) и дерегистрируется при остановке (`DELETE`). Конфигурируется через `AUSF_NNRF_NF_INSTANCE_ID`, `AUSF_NNRF_HEARTBEAT_INTERVAL` (по умолчанию 30 с) |
+| 13 | Производственная совместимость с Nudm (полный контракт `Nudm_UEAuthentication`) | Java управляющий уровень | Текущий контракт mock-UDM упрощён; формы реальных UDM-ответов отличаются |
+| 14 | Реальная интеграция плоскости данных PFCP в сетевом уровне C++ | C++ | Текущий PFCP-код является заглушкой; его подключение к потоку результатов аутентификации замкнёт пользовательскую плоскость |
+| 15 | ~~Манифесты Kubernetes/Helm с проверками готовности/работоспособности~~ | Инфраструктура | ✅ Реализовано: Helm-чарт в `deploy/helm/ausf/` — Deployment/Service для микросервиса Go и управляющего уровня Java, опциональные mock-NF (`mocks.enabled`), PVC для хранилища контекстов, liveness/readiness-пробы, non-root security contexts |
+| 16 | Нагрузочное и soak-тестирование с реальными SUPI-популяциями | Автоматизация | Проверка пропускной способности, TTL под конкурентной нагрузкой и производительности записи в файловое хранилище |
+| 17 | ✅ Devcontainer для однокликового локального развёртывания | Инфраструктура | Устранение зависимости от предустановленных версий Docker/Maven/Go на машинах разработчиков |
