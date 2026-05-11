@@ -79,9 +79,17 @@ func main() {
 		logMain("FATAL", "failed to initialize auth context store", map[string]any{"error": err.Error()})
 		os.Exit(1)
 	}
+
+	// Wrap the Namf client with an async retry queue so that notifications that
+	// exhaust synchronous retries are retried in the background with exponential
+	// backoff (AUSF_NAMF_QUEUE_MAX_ATTEMPTS async attempts, default 10).
+	retryingNamf := namf.NewRetryingClient(namfClient, appConfig.NamfQueueMaxAttempts)
+	retryingNamf.Start()
+	defer retryingNamf.Stop()
+
 	authService := service.NewAuthServiceWithStoreAndTTL(
 		controlPlaneClient,
-		namfClient,
+		retryingNamf,
 		store,
 		time.Duration(appConfig.AuthContextTTLSeconds)*time.Second,
 	)
@@ -142,6 +150,27 @@ func main() {
 		Handler: handler.Routes(),
 	}
 
+	// Eagerly load the server certificate and register a SIGHUP handler so
+	// operators can force immediate cert-cache invalidation after deploying a
+	// new certificate without waiting for the TTL to elapse.
+	var serverCertLoader *tlsutil.CertLoader
+	if appConfig.TLSEnabled() {
+		tlsCertReload := time.Duration(appConfig.TLSCertReloadIntervalSeconds) * time.Second
+		serverCertLoader = tlsutil.NewCertLoader(appConfig.TLSCertFile, appConfig.TLSKeyFile, tlsCertReload)
+		if _, err := serverCertLoader.Get(); err != nil {
+			logMain("FATAL", "server TLS cert load failed", map[string]any{"error": err.Error()})
+			os.Exit(1)
+		}
+		sighupCh := make(chan os.Signal, 1)
+		signal.Notify(sighupCh, syscall.SIGHUP)
+		go func() {
+			for range sighupCh {
+				serverCertLoader.ForceReload()
+				logMain("INFO", "TLS certificate cache invalidated via SIGHUP", map[string]any{})
+			}
+		}()
+	}
+
 	logMain("INFO", "AUSF microservice starting", map[string]any{
 		"address":       appConfig.Address(),
 		"control_plane": appConfig.ControlPlaneBaseURL,
@@ -152,7 +181,7 @@ func main() {
 	// Start serving in a goroutine; signal handler below handles shutdown.
 	serveErr := make(chan error, 1)
 	go func() {
-		serveErr <- serve(server, appConfig)
+		serveErr <- serve(server, appConfig, serverCertLoader)
 	}()
 
 	// Block until SIGTERM or SIGINT, then drain existing connections.
@@ -185,18 +214,12 @@ func main() {
 	}
 }
 
-func serve(server *http.Server, appConfig config.Config) error {
+func serve(server *http.Server, appConfig config.Config, certLoader *tlsutil.CertLoader) error {
 	if appConfig.TLSEnabled() {
 		tlsCfg := &tls.Config{MinVersion: tls.VersionTLS12}
 
-		// Hot-reload: GetCertificate re-reads cert/key from disk when the TTL
-		// expires so that cert rotation takes effect without a process restart.
-		certReload := time.Duration(appConfig.TLSCertReloadIntervalSeconds) * time.Second
-		certLoader := tlsutil.NewCertLoader(appConfig.TLSCertFile, appConfig.TLSKeyFile, certReload)
-		// Eagerly load once to fail fast on misconfiguration.
-		if _, err := certLoader.Get(); err != nil {
-			return fmt.Errorf("server TLS: %w", err)
-		}
+		// certLoader is created in main() and already eagerly loaded; wire it
+		// into the TLS config so it hot-reloads on the configured TTL or SIGHUP.
 		tlsCfg.GetCertificate = certLoader.GetCertificate
 
 		if appConfig.MTLSEnabled {

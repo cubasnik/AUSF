@@ -65,6 +65,10 @@ type Config struct {
 	// (draining in-flight requests + sending HTTP/2 GOAWAY per RFC 9113 §6.8).
 	// 0 means use the default (30 s).
 	ShutdownTimeoutSeconds int
+	// NamfQueueMaxAttempts is the maximum number of asynchronous retry attempts
+	// for Namf notifications that fail all synchronous delivery retries.
+	// 0 means use the default (10).
+	NamfQueueMaxAttempts int
 }
 
 func Load() Config {
@@ -158,6 +162,7 @@ func Load() Config {
 		OCSPEnabled:                    parseBoolEnv("AUSF_OCSP_ENABLED"),
 		TLSCertReloadIntervalSeconds:   parseIntEnvDefault("AUSF_TLS_CERT_RELOAD_INTERVAL_SECONDS", 30),
 		ShutdownTimeoutSeconds:         parseIntEnvDefault("AUSF_SHUTDOWN_TIMEOUT_SECONDS", 30),
+		NamfQueueMaxAttempts:           parseIntEnvDefault("AUSF_NAMF_QUEUE_MAX_ATTEMPTS", 10),
 	}
 }
 

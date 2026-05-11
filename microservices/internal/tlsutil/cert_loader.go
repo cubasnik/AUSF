@@ -4,7 +4,9 @@ package tlsutil
 
 import (
 	"crypto/tls"
+	"crypto/x509"
 	"fmt"
+	"os"
 	"sync"
 	"time"
 )
@@ -60,6 +62,7 @@ func (l *CertLoader) Get() (*tls.Certificate, error) {
 
 	l.cached = &cert
 	l.loadedAt = time.Now()
+	l.warnIfExpiringSoon(l.cached)
 	return l.cached, nil
 }
 
@@ -74,4 +77,42 @@ func (l *CertLoader) GetCertificate(_ *tls.ClientHelloInfo) (*tls.Certificate, e
 // when needed.
 func (l *CertLoader) GetClientCertificate(_ *tls.CertificateRequestInfo) (*tls.Certificate, error) {
 	return l.Get()
+}
+
+// ForceReload invalidates the cached certificate so that the next call to
+// Get() reloads from disk unconditionally, regardless of the configured
+// interval.  It is safe to call concurrently.
+//
+// Useful when an operator sends SIGHUP after deploying a new certificate and
+// wants the process to pick it up immediately without waiting for the TTL.
+func (l *CertLoader) ForceReload() {
+	l.mu.Lock()
+	l.loadedAt = time.Time{} // zero value → always older than interval
+	l.mu.Unlock()
+}
+
+const expiryWarnThreshold = 7 * 24 * time.Hour
+
+// warnIfExpiringSoon writes a JSON-formatted warning to stderr when the
+// certificate leaf's NotAfter is within 7 days.  This gives operators advance
+// notice to rotate the certificate before it expires.
+func (l *CertLoader) warnIfExpiringSoon(cert *tls.Certificate) {
+	var notAfter time.Time
+	if cert.Leaf != nil {
+		notAfter = cert.Leaf.NotAfter
+	} else if len(cert.Certificate) > 0 {
+		if leaf, err := x509.ParseCertificate(cert.Certificate[0]); err == nil {
+			notAfter = leaf.NotAfter
+		}
+	}
+	if notAfter.IsZero() {
+		return
+	}
+	remaining := time.Until(notAfter)
+	if remaining < expiryWarnThreshold {
+		_, _ = fmt.Fprintf(os.Stderr,
+			`{"level":"WARN","msg":"TLS certificate approaching expiry","cert_file":%q,"expires_at":%q,"remaining_hours":%.0f}`+"\n",
+			l.certFile, notAfter.UTC().Format(time.RFC3339), remaining.Hours(),
+		)
+	}
 }
