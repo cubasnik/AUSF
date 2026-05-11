@@ -3,12 +3,12 @@ FROM golang:1.26-bookworm AS builder
 WORKDIR /app
 
 COPY go.mod go.sum ./
-RUN go mod download
+COPY vendor ./vendor
 
 COPY cmd ./cmd
 COPY internal ./internal
 
-RUN go build -o /out/ausf ./cmd/ausf
+RUN go build -mod=vendor -o /out/ausf ./cmd/ausf
 
 FROM golang:1.26-bookworm
 
