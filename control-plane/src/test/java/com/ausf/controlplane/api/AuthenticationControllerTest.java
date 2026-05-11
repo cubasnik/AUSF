@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.ausf.controlplane.authentication.AuthenticationManager;
 import com.ausf.controlplane.authentication.AuthenticationResponse;
+import com.ausf.controlplane.eap.EapPacket;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -96,19 +97,20 @@ class AuthenticationControllerTest {
 
     @Test
     void shouldReturnEapFailurePayloadWhenEapConfirmationFails() throws Exception {
+        String eapFailurePayload = EapPacket.buildFailure((byte) 1);
         when(authenticationManager.verifyAuthenticationResponse(eq("auth-eap-1"), any(), any(), any()))
-            .thenReturn(AuthenticationResponse.failure("EAP-AKA' verification failed", "AUTHENTICATION_REJECTED", "EAP-Failure"));
+            .thenReturn(AuthenticationResponse.failure("EAP-AKA' verification failed", "AUTHENTICATION_REJECTED", eapFailurePayload));
 
         mockMvc.perform(post("/control-plane/v1/auth/auth-eap-1/confirm")
             .contentType(requireNonNull(MediaType.APPLICATION_JSON))
                 .content("""
                     {
-                      "eapPayload": "EAP-Response/AKA'-Challenge bad"
+                      "eapPayload": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
                     }
                     """))
             .andExpect(status().isUnauthorized())
             .andExpect(jsonPath("$.errorCode").value("AUTHENTICATION_REJECTED"))
-            .andExpect(jsonPath("$.eapChallenge").value("EAP-Failure"));
+            .andExpect(jsonPath("$.eapChallenge").value(eapFailurePayload));
     }
 
     @Test

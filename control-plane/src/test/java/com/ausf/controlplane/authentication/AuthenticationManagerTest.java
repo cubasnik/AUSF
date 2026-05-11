@@ -6,6 +6,8 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.ausf.controlplane.crypto.Milenage;
+import com.ausf.controlplane.eap.EapPacket;
 import com.ausf.controlplane.subscriber.AkaAlgorithm;
 import com.ausf.controlplane.subscriber.SubscriberProfile;
 import com.ausf.controlplane.subscriber.SubscriberRepository;
@@ -106,13 +108,16 @@ class AuthenticationManagerTest {
             "5G:mnc001.mcc001.3gppnetwork.org",
             "EAP_AKA_PRIME"
         );
-        String xresStar = authenticationManager.getContext("imsi-250010000000002").getXresStar();
+        AuthenticationContext ctx = authenticationManager.getContext("imsi-250010000000002");
+        byte[] kAutPrime = cryptographyService.deriveKautPrime(ctx.getKausf());
+        byte id = EapPacket.extractIdentifier(challenge.getEapChallenge());
+        String eapResponse = EapPacket.buildChallengeResponse(id, Milenage.hexToBytes(ctx.getXresStar()), kAutPrime);
 
         AuthenticationResponse result = authenticationManager.verifyAuthenticationResponse(
             challenge.getAuthCtxId(),
             null,
             null,
-            "EAP-Response/AKA'-Challenge RES*=" + xresStar
+            eapResponse
         );
 
         assertTrue(result.getSuccess());
@@ -127,12 +132,17 @@ class AuthenticationManagerTest {
             "5G:mnc001.mcc001.3gppnetwork.org",
             "EAP_AKA_PRIME"
         );
+        AuthenticationContext ctx = authenticationManager.getContext("imsi-250010000000002");
+        byte[] kAutPrime = cryptographyService.deriveKautPrime(ctx.getKausf());
+        byte id = EapPacket.extractIdentifier(challenge.getEapChallenge());
+        // All-zero RES* is invalid — will fail verifyAuthentication check
+        String eapResponse = EapPacket.buildChallengeResponse(id, new byte[16], kAutPrime);
 
         AuthenticationResponse result = authenticationManager.verifyAuthenticationResponse(
             challenge.getAuthCtxId(),
             null,
             null,
-            challenge.getEapChallenge().replace("Request", "Response")
+            eapResponse
         );
 
         assertFalse(result.getSuccess());
@@ -147,12 +157,16 @@ class AuthenticationManagerTest {
             "5G:mnc001.mcc001.3gppnetwork.org",
             "EAP_AKA_PRIME"
         );
+        AuthenticationContext ctx = authenticationManager.getContext("imsi-250010000000002");
+        byte[] kAutPrime = cryptographyService.deriveKautPrime(ctx.getKausf());
+        byte id = EapPacket.extractIdentifier(challenge.getEapChallenge());
+        String reauthResponse = EapPacket.buildReauthenticationResponse(id, kAutPrime, false);
 
         AuthenticationResponse result = authenticationManager.verifyAuthenticationResponse(
             challenge.getAuthCtxId(),
             null,
             null,
-            "EAP-Response/AKA'-Reauthentication token"
+            reauthResponse
         );
 
         assertTrue(result.getSuccess());
@@ -170,25 +184,31 @@ class AuthenticationManagerTest {
             "5G:mnc001.mcc001.3gppnetwork.org",
             "EAP_AKA_PRIME"
         );
-        String staleResStar = authenticationManager.getContext("imsi-250010000000002").getXresStar();
+        AuthenticationContext ctx = authenticationManager.getContext("imsi-250010000000002");
+        String staleXresStar = ctx.getXresStar();
+        byte[] staleKAutPrime = cryptographyService.deriveKautPrime(ctx.getKausf());
+        byte id = EapPacket.extractIdentifier(challenge.getEapChallenge());
+        String reauthResponse = EapPacket.buildReauthenticationResponse(id, staleKAutPrime, false);
 
         AuthenticationResponse refreshedChallenge = authenticationManager.verifyAuthenticationResponse(
             challenge.getAuthCtxId(),
             null,
             null,
-            "EAP-Response/AKA'-Reauthentication token"
+            reauthResponse
         );
+        // Stale response: built with old credentials, wrong MAC and wrong RES* for new challenge
+        String staleResponse = EapPacket.buildChallengeResponse(id, Milenage.hexToBytes(staleXresStar), staleKAutPrime);
         AuthenticationResponse staleResult = authenticationManager.verifyAuthenticationResponse(
             challenge.getAuthCtxId(),
             null,
             null,
-            "EAP-Response/AKA'-Challenge RES*=" + staleResStar
+            staleResponse
         );
 
         assertTrue(refreshedChallenge.getSuccess());
         assertFalse(staleResult.getSuccess());
         assertEquals("AUTHENTICATION_REJECTED", staleResult.getErrorCode());
-        assertEquals("EAP-Failure", staleResult.getEapChallenge());
+        assertNotNull(staleResult.getEapChallenge()); // binary EAP-Failure
         assertEquals(AuthenticationStatus.FAILED, authenticationManager.getContext("imsi-250010000000002").getStatus());
     }
 
@@ -200,12 +220,16 @@ class AuthenticationManagerTest {
             "5G:mnc001.mcc001.3gppnetwork.org",
             "EAP_AKA_PRIME"
         );
+        AuthenticationContext ctx = authenticationManager.getContext("imsi-250010000000002");
+        byte[] kAutPrime = cryptographyService.deriveKautPrime(ctx.getKausf());
+        byte id = EapPacket.extractIdentifier(challenge.getEapChallenge());
+        String fastReauthResponse = EapPacket.buildReauthenticationResponse(id, kAutPrime, true);
 
         AuthenticationResponse result = authenticationManager.verifyAuthenticationResponse(
             challenge.getAuthCtxId(),
             null,
             null,
-            "EAP-Response/AKA'-Fast-Reauthentication token"
+            fastReauthResponse
         );
 
         assertTrue(result.getSuccess());
@@ -223,18 +247,22 @@ class AuthenticationManagerTest {
             "5G:mnc001.mcc001.3gppnetwork.org",
             "EAP_AKA_PRIME"
         );
-        String auts = cryptographyService.generateMilenageAuts(
+        AuthenticationContext ctx = authenticationManager.getContext("imsi-250010000000003");
+        byte[] kAutPrime = cryptographyService.deriveKautPrime(ctx.getKausf());
+        byte id = EapPacket.extractIdentifier(challenge.getEapChallenge());
+        String autsHex = cryptographyService.generateMilenageAuts(
             challenge.getRand(),
             FIVE_G_AKA_KEY,
             FIVE_G_AKA_OPC,
             48
         );
+        String syncFailResponse = EapPacket.buildSyncFailureResponse(id, Milenage.hexToBytes(autsHex), kAutPrime);
 
         AuthenticationResponse result = authenticationManager.verifyAuthenticationResponse(
             challenge.getAuthCtxId(),
             null,
             null,
-            "EAP-Response/AKA'-Synchronization-Failure AUTS=" + auts
+            syncFailResponse
         );
 
         assertTrue(result.getSuccess());

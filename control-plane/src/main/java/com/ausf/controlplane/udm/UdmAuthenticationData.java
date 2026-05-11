@@ -5,6 +5,7 @@ public class UdmAuthenticationData {
     private final String authType;
     private final String servingNetworkName;
     private final AuthenticationVector authenticationVector;
+    private String authEventId;
 
     public UdmAuthenticationData(
         String supi,
@@ -32,5 +33,13 @@ public class UdmAuthenticationData {
 
     public AuthenticationVector getAuthenticationVector() {
         return authenticationVector;
+    }
+
+    public String getAuthEventId() {
+        return authEventId;
+    }
+
+    void setAuthEventId(String authEventId) {
+        this.authEventId = authEventId;
     }
 }

@@ -42,8 +42,11 @@ def main() -> int:
         client.delete_authentication_context(challenge["authCtxId"])
 
     notifications = load_amf_notifications()[baseline_notification_count:]
-    assert not notifications
-    print("amf-notifications: []")
+    assert len(notifications) == 1, f"expected 1 FAILURE notification, got {notifications}"
+    assert notifications[0]["authResult"] == "FAILURE"
+    assert notifications[0]["authCtxId"] == challenge["authCtxId"]
+    assert notifications[0].get("kseaf") is None
+    print(f"amf-notifications: {notifications}")
     return 0
 
 

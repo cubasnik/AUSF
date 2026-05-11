@@ -14,6 +14,8 @@ from smoke_runtime import (
     MOCK_UDM_BASE_URL,
     build_eap_aka_prime_fast_reauthentication_payload,
     build_eap_aka_prime_response_payload,
+    get_eap_context,
+    is_eap_failure,
     load_amf_notifications,
     load_control_plane_authentication_context,
     wait_for_health,
@@ -41,21 +43,22 @@ def main() -> int:
 
     try:
         initial_control_plane_context = load_control_plane_authentication_context(supi)
+        eap_ctx = get_eap_context(supi, challenge["eapSession"]["payload"])
         refreshed = client.confirm_eap_authentication(
             challenge["authCtxId"],
-            build_eap_aka_prime_fast_reauthentication_payload(),
+            build_eap_aka_prime_fast_reauthentication_payload(eap_ctx),
         )
         print(f"fast-reauth-confirmed: {refreshed}")
         assert refreshed["authResult"] == "ONGOING"
 
-        stale_payload = build_eap_aka_prime_response_payload(initial_control_plane_context["xresStar"])
+        stale_payload = build_eap_aka_prime_response_payload(initial_control_plane_context["xresStar"], eap_ctx)
         try:
             client.confirm_eap_authentication(challenge["authCtxId"], stale_payload)
         except AUSFError as error:
             assert error.status_code == 401
             assert error.payload["cause"] == "AUTHENTICATION_REJECTED"
             assert error.payload["detail"] == "EAP-AKA' verification failed"
-            assert error.payload["eapPayload"] == "EAP-Failure"
+            assert is_eap_failure(error.payload["eapPayload"])
             print(f"stale-eap-authentication-rejected-error: {error.payload}")
         else:
             raise AssertionError(
@@ -65,7 +68,7 @@ def main() -> int:
         try:
             client.confirm_eap_authentication(
                 challenge["authCtxId"],
-                build_eap_aka_prime_fast_reauthentication_payload(),
+                build_eap_aka_prime_fast_reauthentication_payload(eap_ctx),
             )
         except AUSFError as error:
             assert error.status_code == 401
@@ -80,7 +83,7 @@ def main() -> int:
 
         stored_context = client.get_authentication_context(challenge["authCtxId"])
         assert stored_context["status"] == "FAILED"
-        assert stored_context["eapSession"]["payload"] == "EAP-Failure"
+        assert is_eap_failure(stored_context["eapSession"]["payload"])
         notifications = load_amf_notifications()[baseline_notification_count:]
         assert not notifications
         print(f"stored-context: {stored_context}")

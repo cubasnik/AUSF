@@ -8,7 +8,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from smoke_client import AUSFClient, AUSFError
-from smoke_runtime import AUSF_BASE_URL, EAP_AKA_PRIME_RESPONSE_PREFIX, MOCK_AMF_BASE_URL, MOCK_NRF_BASE_URL, MOCK_UDM_BASE_URL, load_amf_notifications, wait_for_health
+from smoke_runtime import AUSF_BASE_URL, MOCK_AMF_BASE_URL, MOCK_NRF_BASE_URL, MOCK_UDM_BASE_URL, build_eap_aka_prime_response_payload, get_eap_context, is_eap_failure, load_amf_notifications, wait_for_health
 
 
 def main() -> int:
@@ -31,13 +31,16 @@ def main() -> int:
     )
     assert challenge["authType"] == "EAP_AKA_PRIME"
 
+    eap_ctx = get_eap_context(supi, challenge["eapSession"]["payload"])
+    # Send wrong RES* (all-zero) so server rejects
+    invalid_payload = build_eap_aka_prime_response_payload(bytes(16).hex(), eap_ctx)
     try:
-        client.confirm_eap_authentication(challenge["authCtxId"], f"{EAP_AKA_PRIME_RESPONSE_PREFIX}invalid-token")
+        client.confirm_eap_authentication(challenge["authCtxId"], invalid_payload)
     except AUSFError as error:
         assert error.status_code == 401
         assert error.payload["cause"] == "AUTHENTICATION_REJECTED"
         assert error.payload["detail"] == "EAP-AKA' verification failed"
-        assert error.payload["eapPayload"] == "EAP-Failure"
+        assert is_eap_failure(error.payload["eapPayload"])
         print(f"eap-authentication-rejected-error: {error.payload}")
     else:
         raise AssertionError("expected 401 AUTHENTICATION_REJECTED for invalid eapPayload")
@@ -45,8 +48,11 @@ def main() -> int:
         client.delete_authentication_context(challenge["authCtxId"])
 
     notifications = load_amf_notifications()[baseline_notification_count:]
-    assert not notifications
-    print("amf-notifications: []")
+    assert len(notifications) == 1, f"expected 1 FAILURE notification, got {notifications}"
+    assert notifications[0]["authResult"] == "FAILURE"
+    assert notifications[0]["authCtxId"] == challenge["authCtxId"]
+    assert notifications[0].get("kseaf") is None
+    print(f"amf-notifications: {notifications}")
     return 0
 
 

@@ -70,6 +70,12 @@ NEGATIVE_SCRIPTS = [
     "automation/scripts/smoke_test_http_udm_eap_fast_reauthentication_stale_response.py",
     "automation/scripts/smoke_test_http_udm_eap_reauthentication_stale_response.py",
     "automation/scripts/smoke_test_http_udm_eap_sync_failure_stale_response.py",
+    # Nausf_UEAuthentication extensions
+    "automation/scripts/smoke_test_http_udm_suci_null_scheme.py",
+    "automation/scripts/smoke_test_http_udm_sor_protection.py",
+    "automation/scripts/smoke_test_http_udm_sor_protection_optional_fields.py",
+    "automation/scripts/smoke_test_http_udm_upu_protection.py",
+    "automation/scripts/smoke_test_http_udm_upu_protection_optional_fields.py",
 ]
 SMOKE_SCRIPTS = HAPPY_PATH_SCRIPTS + NEGATIVE_SCRIPTS
 HOST_LEVEL_SCRIPTS = [

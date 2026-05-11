@@ -12,4 +12,22 @@ public interface UdmClient {
         String rand,
         String auts
     );
+
+    /**
+     * Notify UDM of authentication outcome (TS 29.503 §6.1.6.2).
+     * Best-effort — implementations must not propagate failures.
+     */
+    default void confirmAuthEvent(
+        String supi,
+        String authEventId,
+        boolean success,
+        String authType,
+        String servingNetworkName
+    ) {}
+
+    /**
+     * Remove auth event record from UDM (TS 29.503 §6.1.6.3).
+     * Best-effort — implementations must not propagate failures.
+     */
+    default void deleteAuthEvent(String supi, String authEventId) {}
 }

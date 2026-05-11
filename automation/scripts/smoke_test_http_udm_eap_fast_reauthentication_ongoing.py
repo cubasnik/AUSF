@@ -14,6 +14,8 @@ from smoke_runtime import (
     MOCK_UDM_BASE_URL,
     build_eap_aka_prime_fast_reauthentication_payload,
     build_eap_aka_prime_response_payload,
+    get_eap_context,
+    is_eap_challenge,
     load_amf_notifications,
     load_control_plane_authentication_context,
     wait_for_health,
@@ -41,16 +43,17 @@ def main() -> int:
     assert challenge["authType"] == "EAP_AKA_PRIME"
 
     try:
+        eap_ctx = get_eap_context(supi, challenge["eapSession"]["payload"])
         confirmed = client.confirm_eap_authentication(
             challenge["authCtxId"],
-            build_eap_aka_prime_fast_reauthentication_payload(),
+            build_eap_aka_prime_fast_reauthentication_payload(eap_ctx),
         )
         print(f"fast-reauth-confirmed: {confirmed}")
         assert confirmed["authResult"] == "ONGOING"
         assert confirmed["message"] == "EAP-AKA' fast re-authentication challenge generated"
         assert confirmed["eapSession"]["method"] == "EAP-AKA'"
         assert confirmed["eapSession"]["sessionId"] == challenge["authCtxId"]
-        assert confirmed["eapSession"]["payload"].startswith("EAP-Request/AKA'-Challenge")
+        assert is_eap_challenge(confirmed["eapSession"]["payload"])
 
         stored_context = client.get_authentication_context(challenge["authCtxId"])
         assert stored_context["status"] == "CHALLENGE_SENT"
@@ -62,7 +65,8 @@ def main() -> int:
         print("amf-notifications: []")
 
         control_plane_context = load_control_plane_authentication_context(supi)
-        eap_payload = build_eap_aka_prime_response_payload(control_plane_context["xresStar"])
+        eap_ctx2 = get_eap_context(supi, confirmed["eapSession"]["payload"])
+        eap_payload = build_eap_aka_prime_response_payload(control_plane_context["xresStar"], eap_ctx2)
         final_confirmed = client.confirm_eap_authentication(challenge["authCtxId"], eap_payload)
         assert final_confirmed["authResult"] == "SUCCESS"
         print(f"final-confirmed: {final_confirmed}")

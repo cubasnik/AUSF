@@ -10,12 +10,23 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
 
 set(LIBRARY_SOURCES
     src/pfcp_handler.cpp
+    src/authentication_result.cpp
+    src/pfcp_ie.cpp
+    src/pfcp_rules.cpp
+    src/pfcp_socket.cpp
+    src/gtpu.cpp
+    src/pfcp_data_plane.cpp
 )
 
 add_library(ausf_networking ${LIBRARY_SOURCES})
-target_link_libraries(ausf_networking
-    Threads::Threads
-)
+target_link_libraries(ausf_networking Threads::Threads)
 
 add_executable(networking_test src/main.cpp)
 target_link_libraries(networking_test ausf_networking)
+
+# Windows requires Winsock2 for UDP sockets.
+if(WIN32)
+    target_compile_definitions(ausf_networking PRIVATE AUSF_PLATFORM_WINDOWS)
+    target_compile_definitions(networking_test PRIVATE AUSF_PLATFORM_WINDOWS)
+    target_link_libraries(ausf_networking ws2_32)
+endif()

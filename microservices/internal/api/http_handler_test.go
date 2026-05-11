@@ -35,6 +35,14 @@ func (stubControlPlaneClient) Context(_ context.Context, _ string) (controlplane
 	return controlplane.AuthenticationResponse{}, nil
 }
 
+func (stubControlPlaneClient) SoRProtect(_ context.Context, _ string, _ controlplane.SoRProtectionRequest) (controlplane.SoRProtectionResponse, error) {
+	return controlplane.SoRProtectionResponse{SoRMacIAUSF: "00000000000000000000000000000000", CounterSoR: "0000"}, nil
+}
+
+func (stubControlPlaneClient) UPUProtect(_ context.Context, _ string, _ controlplane.UPUProtectionRequest) (controlplane.UPUProtectionResponse, error) {
+	return controlplane.UPUProtectionResponse{UPUMacIAUSF: "00000000000000000000000000000000", CounterUPU: "0000"}, nil
+}
+
 func TestCreateUEAuthenticationShouldRejectInvalidNotificationURI(t *testing.T) {
 	handler := NewHandler(service.NewAuthService(stubControlPlaneClient{}, nil)).Routes()
 	payload := map[string]string{
@@ -449,6 +457,14 @@ func (resyncConfirmControlPlaneClient) Context(_ context.Context, _ string) (con
 	return controlplane.AuthenticationResponse{}, nil
 }
 
+func (resyncConfirmControlPlaneClient) SoRProtect(_ context.Context, _ string, _ controlplane.SoRProtectionRequest) (controlplane.SoRProtectionResponse, error) {
+	return controlplane.SoRProtectionResponse{}, nil
+}
+
+func (resyncConfirmControlPlaneClient) UPUProtect(_ context.Context, _ string, _ controlplane.UPUProtectionRequest) (controlplane.UPUProtectionResponse, error) {
+	return controlplane.UPUProtectionResponse{}, nil
+}
+
 func TestFiveGAkaConfirmationShouldAcceptAutsAndReturnSyncFailure(t *testing.T) {
 	authService := service.NewAuthService(resyncConfirmControlPlaneClient{}, nil)
 	handler := NewHandler(authService).Routes()
@@ -508,6 +524,14 @@ func (reauthConfirmControlPlaneClient) Confirm(_ context.Context, _ string, requ
 
 func (reauthConfirmControlPlaneClient) Context(_ context.Context, _ string) (controlplane.AuthenticationResponse, error) {
 	return controlplane.AuthenticationResponse{}, nil
+}
+
+func (reauthConfirmControlPlaneClient) SoRProtect(_ context.Context, _ string, _ controlplane.SoRProtectionRequest) (controlplane.SoRProtectionResponse, error) {
+	return controlplane.SoRProtectionResponse{}, nil
+}
+
+func (reauthConfirmControlPlaneClient) UPUProtect(_ context.Context, _ string, _ controlplane.UPUProtectionRequest) (controlplane.UPUProtectionResponse, error) {
+	return controlplane.UPUProtectionResponse{}, nil
 }
 
 func TestEapSessionShouldReturnOngoingWithRefreshedChallengeOnReauthentication(t *testing.T) {
@@ -571,6 +595,14 @@ func (fastReauthConfirmControlPlaneClient) Context(_ context.Context, _ string) 
 	return controlplane.AuthenticationResponse{}, nil
 }
 
+func (fastReauthConfirmControlPlaneClient) SoRProtect(_ context.Context, _ string, _ controlplane.SoRProtectionRequest) (controlplane.SoRProtectionResponse, error) {
+	return controlplane.SoRProtectionResponse{}, nil
+}
+
+func (fastReauthConfirmControlPlaneClient) UPUProtect(_ context.Context, _ string, _ controlplane.UPUProtectionRequest) (controlplane.UPUProtectionResponse, error) {
+	return controlplane.UPUProtectionResponse{}, nil
+}
+
 func TestEapSessionShouldReturnOngoingWithRefreshedChallengeOnFastReauthentication(t *testing.T) {
 	authService := service.NewAuthService(fastReauthConfirmControlPlaneClient{}, nil)
 	handler := NewHandler(authService).Routes()
@@ -628,6 +660,14 @@ func (failingConfirmControlPlaneClient) Context(_ context.Context, _ string) (co
 	return controlplane.AuthenticationResponse{}, nil
 }
 
+func (failingConfirmControlPlaneClient) SoRProtect(_ context.Context, _ string, _ controlplane.SoRProtectionRequest) (controlplane.SoRProtectionResponse, error) {
+	return controlplane.SoRProtectionResponse{}, nil
+}
+
+func (failingConfirmControlPlaneClient) UPUProtect(_ context.Context, _ string, _ controlplane.UPUProtectionRequest) (controlplane.UPUProtectionResponse, error) {
+	return controlplane.UPUProtectionResponse{}, nil
+}
+
 type failingInitiateControlPlaneClient struct{}
 
 func (failingInitiateControlPlaneClient) Initiate(_ context.Context, _ controlplane.AuthenticationRequest) (controlplane.AuthenticationResponse, error) {
@@ -646,6 +686,14 @@ func (failingInitiateControlPlaneClient) Context(_ context.Context, _ string) (c
 	return controlplane.AuthenticationResponse{}, nil
 }
 
+func (failingInitiateControlPlaneClient) SoRProtect(_ context.Context, _ string, _ controlplane.SoRProtectionRequest) (controlplane.SoRProtectionResponse, error) {
+	return controlplane.SoRProtectionResponse{}, nil
+}
+
+func (failingInitiateControlPlaneClient) UPUProtect(_ context.Context, _ string, _ controlplane.UPUProtectionRequest) (controlplane.UPUProtectionResponse, error) {
+	return controlplane.UPUProtectionResponse{}, nil
+}
+
 type unavailableInitiateControlPlaneClient struct{}
 
 func (unavailableInitiateControlPlaneClient) Initiate(_ context.Context, _ controlplane.AuthenticationRequest) (controlplane.AuthenticationResponse, error) {
@@ -658,6 +706,14 @@ func (unavailableInitiateControlPlaneClient) Confirm(_ context.Context, _ string
 
 func (unavailableInitiateControlPlaneClient) Context(_ context.Context, _ string) (controlplane.AuthenticationResponse, error) {
 	return controlplane.AuthenticationResponse{}, nil
+}
+
+func (unavailableInitiateControlPlaneClient) SoRProtect(_ context.Context, _ string, _ controlplane.SoRProtectionRequest) (controlplane.SoRProtectionResponse, error) {
+	return controlplane.SoRProtectionResponse{}, nil
+}
+
+func (unavailableInitiateControlPlaneClient) UPUProtect(_ context.Context, _ string, _ controlplane.UPUProtectionRequest) (controlplane.UPUProtectionResponse, error) {
+	return controlplane.UPUProtectionResponse{}, nil
 }
 
 type failingRejectedConfirmControlPlaneClient struct{}
@@ -684,6 +740,14 @@ func (failingRejectedConfirmControlPlaneClient) Confirm(_ context.Context, _ str
 
 func (failingRejectedConfirmControlPlaneClient) Context(_ context.Context, _ string) (controlplane.AuthenticationResponse, error) {
 	return controlplane.AuthenticationResponse{}, nil
+}
+
+func (failingRejectedConfirmControlPlaneClient) SoRProtect(_ context.Context, _ string, _ controlplane.SoRProtectionRequest) (controlplane.SoRProtectionResponse, error) {
+	return controlplane.SoRProtectionResponse{}, nil
+}
+
+func (failingRejectedConfirmControlPlaneClient) UPUProtect(_ context.Context, _ string, _ controlplane.UPUProtectionRequest) (controlplane.UPUProtectionResponse, error) {
+	return controlplane.UPUProtectionResponse{}, nil
 }
 
 type assertAnError string
@@ -794,6 +858,14 @@ func (failingRejectedEapConfirmControlPlaneClient) Confirm(_ context.Context, _ 
 
 func (failingRejectedEapConfirmControlPlaneClient) Context(_ context.Context, _ string) (controlplane.AuthenticationResponse, error) {
 	return controlplane.AuthenticationResponse{}, nil
+}
+
+func (failingRejectedEapConfirmControlPlaneClient) SoRProtect(_ context.Context, _ string, _ controlplane.SoRProtectionRequest) (controlplane.SoRProtectionResponse, error) {
+	return controlplane.SoRProtectionResponse{}, nil
+}
+
+func (failingRejectedEapConfirmControlPlaneClient) UPUProtect(_ context.Context, _ string, _ controlplane.UPUProtectionRequest) (controlplane.UPUProtectionResponse, error) {
+	return controlplane.UPUProtectionResponse{}, nil
 }
 
 func TestEapSessionShouldPropagateEapFailurePayload(t *testing.T) {

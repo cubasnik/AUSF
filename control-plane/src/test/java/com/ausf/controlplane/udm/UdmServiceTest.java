@@ -50,10 +50,8 @@ class UdmServiceTest {
         assertEquals(expected.xresStar(), vector.getXresStar());
         assertEquals(expected.hxresStar(), vector.getHxresStar());
         assertEquals(expected.kausf(), vector.getKausf());
-        assertEquals(
-            "EAP-Request/AKA'-Challenge RAND=" + expected.rand() + " AUTN=" + expected.autn() + " HXRES*=" + expected.hxresStar(),
-            vector.getEapChallenge()
-        );
+        // EAP challenge packet is now built by AuthenticationManager, not UdmService
+        assertEquals(null, vector.getEapChallenge());
     }
 
     @Test
@@ -89,10 +87,8 @@ class UdmServiceTest {
         assertEquals(expected.xresStar(), vector.getXresStar());
         assertEquals(expected.hxresStar(), vector.getHxresStar());
         assertEquals(expected.kausf(), vector.getKausf());
-        assertEquals(
-            "EAP-Request/AKA'-Challenge RAND=" + expected.rand() + " AUTN=" + expected.autn() + " HXRES*=" + expected.hxresStar(),
-            vector.getEapChallenge()
-        );
+        // EAP challenge packet is now built by AuthenticationManager, not UdmService
+        assertEquals(null, vector.getEapChallenge());
     }
 
     @Test
@@ -137,10 +133,8 @@ class UdmServiceTest {
         assertEquals(32, vector.getHxresStar().length());
         assertEquals(64, vector.getKausf().length());
         assertEquals(32, vector.getXresStar().length());
-        assertEquals(
-            "EAP-Request/AKA'-Challenge RAND=" + vector.getRand() + " AUTN=" + vector.getAutn() + " HXRES*=" + vector.getHxresStar(),
-            vector.getEapChallenge()
-        );
+        // EAP challenge packet is now built by AuthenticationManager, not UdmService
+        assertEquals(null, vector.getEapChallenge());
     }
 
     @Test

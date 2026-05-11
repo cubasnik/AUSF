@@ -38,7 +38,9 @@ type EapSession struct {
 	SessionID string `json:"sessionId"`
 }
 
-const eapFailurePayload = "EAP-Failure"
+// eapFailurePayload is the fallback binary EAP-Failure (Code=4, ID=0, Len=4) in base64url, no padding.
+// Used only if the control-plane response is missing the eapChallenge field.
+const eapFailurePayload = "BAAABA"
 
 type AuthLinks struct {
 	FiveGAka   *Link `json:"5g-aka,omitempty"`
@@ -92,6 +94,8 @@ type controlPlaneAPI interface {
 	Initiate(ctx context.Context, request controlplane.AuthenticationRequest) (controlplane.AuthenticationResponse, error)
 	Confirm(ctx context.Context, authCtxID string, request controlplane.AuthenticationRequest) (controlplane.AuthenticationResponse, error)
 	Context(ctx context.Context, supi string) (controlplane.AuthenticationResponse, error)
+	SoRProtect(ctx context.Context, authCtxID string, req controlplane.SoRProtectionRequest) (controlplane.SoRProtectionResponse, error)
+	UPUProtect(ctx context.Context, authCtxID string, req controlplane.UPUProtectionRequest) (controlplane.UPUProtectionResponse, error)
 }
 
 type namfNotifier interface {
@@ -212,6 +216,21 @@ func (service *AuthService) Confirm(ctx context.Context, authCtxID string, resSt
 			}
 			if saveErr := service.store.Save(context); saveErr != nil {
 				return ConfirmationResult{}, contextStoreError("auth context update failed", saveErr)
+			}
+			if service.namfClient != nil {
+				notification := namf.UEAuthenticationStatusNotification{
+					AuthCtxID:          authCtxID,
+					SUPI:               context.SUPI,
+					AuthType:           context.AuthType,
+					ServingNetworkName: context.ServingNetworkName,
+					AuthResult:         "FAILURE",
+				}
+				if notifyErr := service.namfClient.NotifyUEAuthenticationStatus(notification, context.NotificationURI); notifyErr != nil {
+					logServiceJSON("WARN", "namf failure notification failed", map[string]any{
+						"auth_ctx_id": authCtxID,
+						"error":       notifyErr.Error(),
+					})
+				}
 			}
 		}
 		if service.recorder != nil {

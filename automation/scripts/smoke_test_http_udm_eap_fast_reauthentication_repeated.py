@@ -14,6 +14,7 @@ from smoke_runtime import (
     MOCK_UDM_BASE_URL,
     build_eap_aka_prime_fast_reauthentication_payload,
     build_eap_aka_prime_response_payload,
+    get_eap_context,
     load_amf_notifications,
     load_control_plane_authentication_context,
     wait_for_health,
@@ -40,9 +41,10 @@ def main() -> int:
     )
 
     try:
+        eap_ctx = get_eap_context(supi, challenge["eapSession"]["payload"])
         first_reauth = client.confirm_eap_authentication(
             challenge["authCtxId"],
-            build_eap_aka_prime_fast_reauthentication_payload(),
+            build_eap_aka_prime_fast_reauthentication_payload(eap_ctx),
         )
         print(f"first-fast-reauth-confirmed: {first_reauth}")
         assert first_reauth["authCtxId"] == challenge["authCtxId"]
@@ -58,9 +60,10 @@ def main() -> int:
         assert not notifications
         print("amf-notifications-after-first-refresh: []")
 
+        eap_ctx2 = get_eap_context(supi, first_reauth["eapSession"]["payload"])
         second_reauth = client.confirm_eap_authentication(
             challenge["authCtxId"],
-            build_eap_aka_prime_fast_reauthentication_payload(),
+            build_eap_aka_prime_fast_reauthentication_payload(eap_ctx2),
         )
         print(f"second-fast-reauth-confirmed: {second_reauth}")
         assert second_reauth["authCtxId"] == challenge["authCtxId"]
@@ -77,9 +80,10 @@ def main() -> int:
         print("amf-notifications-after-second-refresh: []")
 
         final_control_plane_context = load_control_plane_authentication_context(supi)
+        final_eap_ctx = get_eap_context(supi, second_reauth["eapSession"]["payload"])
         final_confirmed = client.confirm_eap_authentication(
             challenge["authCtxId"],
-            build_eap_aka_prime_response_payload(final_control_plane_context["xresStar"]),
+            build_eap_aka_prime_response_payload(final_control_plane_context["xresStar"], final_eap_ctx),
         )
         print(f"final-confirmed: {final_confirmed}")
         assert final_confirmed["authCtxId"] == challenge["authCtxId"]

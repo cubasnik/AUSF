@@ -14,6 +14,7 @@ from smoke_runtime import (
     MOCK_UDM_BASE_URL,
     build_eap_aka_prime_response_payload,
     build_eap_aka_prime_synchronization_failure_payload,
+    get_eap_context,
     load_amf_notifications,
     load_control_plane_authentication_context,
     wait_for_health,
@@ -38,9 +39,10 @@ def main() -> int:
         auth_type="EAP_AKA_PRIME",
         notification_uri="http://mock-amf:8092/namf-comm/v1/ue-authentications/{authCtxId}/status-notify",
     )
+    eap_ctx = get_eap_context(supi, challenge["eapSession"]["payload"])
     refreshed = client.confirm_eap_authentication(
         challenge["authCtxId"],
-        build_eap_aka_prime_synchronization_failure_payload(),
+        build_eap_aka_prime_synchronization_failure_payload("00" * 14, eap_ctx),
     )
     print(f"sync-failure-confirmed: {refreshed}")
 
@@ -58,7 +60,8 @@ def main() -> int:
     print("amf-notifications: []")
 
     control_plane_context = load_control_plane_authentication_context(supi)
-    eap_payload = build_eap_aka_prime_response_payload(control_plane_context["xresStar"])
+    eap_ctx2 = get_eap_context(supi, refreshed["eapSession"]["payload"])
+    eap_payload = build_eap_aka_prime_response_payload(control_plane_context["xresStar"], eap_ctx2)
     final_confirmed = client.confirm_eap_authentication(challenge["authCtxId"], eap_payload)
     print(f"final-confirmed: {final_confirmed}")
 

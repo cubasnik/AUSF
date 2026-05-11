@@ -9,7 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from smoke_client import AUSFClient
-from smoke_runtime import AUSF_BASE_URL, MOCK_AMF_BASE_URL, MOCK_NRF_BASE_URL, MOCK_UDM_BASE_URL, build_eap_aka_prime_response_payload, load_amf_notifications, load_control_plane_authentication_context, wait_for_health
+from smoke_runtime import AUSF_BASE_URL, MOCK_AMF_BASE_URL, MOCK_NRF_BASE_URL, MOCK_UDM_BASE_URL, build_eap_aka_prime_response_payload, get_eap_context, load_amf_notifications, wait_for_health
 
 
 def main() -> int:
@@ -31,8 +31,8 @@ def main() -> int:
         notification_uri="http://mock-amf:8092/namf-comm/v1/ue-authentications/{authCtxId}/status-notify",
     )
     assert challenge["authType"] == "EAP_AKA_PRIME"
-    control_plane_context = load_control_plane_authentication_context(supi)
-    eap_payload = build_eap_aka_prime_response_payload(control_plane_context["xresStar"])
+    eap_ctx = get_eap_context(supi, challenge["eapSession"]["payload"])
+    eap_payload = build_eap_aka_prime_response_payload(eap_ctx["xres_star"], eap_ctx)
 
     confirmed = client.confirm_eap_authentication(challenge["authCtxId"], eap_payload)
     print(f"confirmed: {confirmed}")

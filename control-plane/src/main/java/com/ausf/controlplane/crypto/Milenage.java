@@ -128,6 +128,75 @@ public class Milenage {
         return bytesToHex(concat(concealedSqn, macS));
     }
 
+    /**
+     * Derive OPc from operator key OP and subscriber key K per TS 35.206 §3.
+     * <pre>OPc = OP ⊕ E[K](OP)</pre>
+     * In production deployments the operator holds OP as a secret and distributes
+     * OPc (= OP ⊕ E[K](OP)) per-subscriber so that OP is never exposed to the HLR/UDM.
+     *
+     * @param k  16-byte AES key as 32 hex chars
+     * @param op 16-byte operator constant as 32 hex chars
+     * @return OPc as 32 hex chars
+     */
+    public static String computeOpc(String k, String op) {
+        requireHexLength(k, 32, "k");
+        requireHexLength(op, 32, "op");
+        byte[] K  = hexToBytes(k);
+        byte[] OP = hexToBytes(op);
+        return bytesToHex(xor(OP, aesEncrypt(K, OP)));
+    }
+
+    /**
+     * Compute MAC-A (f1) with a caller-supplied AMF value.
+     * <p>The default {@link #generateVector} always uses AMF=0x8000. This method
+     * exposes the raw f1 function so that the TS 35.208 spec vectors (which use
+     * AMF=0xb9b9) can be verified directly.
+     *
+     * @param rand   32 hex chars (16 bytes)
+     * @param k      32 hex chars (16 bytes)
+     * @param opc    32 hex chars (16 bytes)
+     * @param sqn    48-bit sequence number
+     * @param amfHex 4 hex chars (2 bytes)
+     * @return MAC-A as 16 hex chars (8 bytes)
+     */
+    public String computeMacA(String rand, String k, String opc, long sqn, String amfHex) {
+        requireHexLength(rand,   32, "rand");
+        requireHexLength(k,      32, "k");
+        requireHexLength(opc,    32, "opc");
+        requireHexLength(amfHex,  4, "amfHex");
+        byte[] K    = hexToBytes(k);
+        byte[] RAND = hexToBytes(rand);
+        byte[] OPc  = hexToBytes(opc);
+        byte[] SQN  = sqnToBytes(sqn);
+        byte[] AMF  = hexToBytes(amfHex);
+        byte[] TEMP = computeTemp(K, RAND, OPc);
+        byte[] IN1  = buildIN1(SQN, AMF);
+        byte[] OUT1 = xor(aesEncrypt(K, xorLastByte(xor(IN1, rotate(xor(TEMP, OPc), R1)), C1)), OPc);
+        return bytesToHex(subarray(OUT1, 0, 8));
+    }
+
+    /**
+     * Compute MAC-S (f1*) with AMF* = 0x0000 per TS 35.206.
+     * Exposes the raw f1* function for direct spec-vector verification.
+     *
+     * @param rand 32 hex chars (16 bytes)
+     * @param k    32 hex chars (16 bytes)
+     * @param opc  32 hex chars (16 bytes)
+     * @param sqn  48-bit sequence number
+     * @return MAC-S as 16 hex chars (8 bytes)
+     */
+    public String computeF1Star(String rand, String k, String opc, long sqn) {
+        requireHexLength(rand, 32, "rand");
+        requireHexLength(k,    32, "k");
+        requireHexLength(opc,  32, "opc");
+        byte[] K    = hexToBytes(k);
+        byte[] RAND = hexToBytes(rand);
+        byte[] OPc  = hexToBytes(opc);
+        byte[] SQN  = sqnToBytes(sqn);
+        byte[] TEMP = computeTemp(K, RAND, OPc);
+        return bytesToHex(computeMacS(K, TEMP, OPc, SQN));
+    }
+
     public OptionalLong validateAutsAndRecoverSqn(String rand, String auts, String permanentKey, String opc) {
         if (auts == null || auts.isBlank() || auts.length() != 28) {
             return OptionalLong.empty();

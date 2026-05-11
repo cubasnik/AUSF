@@ -5,6 +5,7 @@ public class AuthenticationContext {
     private final String supi;
     private String authType;
     private String servingNetworkName;
+    private String authEventId;
     private String rand;
     private String autn;
     private String auts;
@@ -17,6 +18,8 @@ public class AuthenticationContext {
     private AuthenticationStatus status;
     private final long createdAt;
     private final long expiresAt;
+    private int sorCounter;
+    private int upuCounter;
 
     public AuthenticationContext(String authCtxId, String supi) {
         this.authCtxId = authCtxId;
@@ -48,6 +51,14 @@ public class AuthenticationContext {
 
     public void setServingNetworkName(String servingNetworkName) {
         this.servingNetworkName = servingNetworkName;
+    }
+
+    public String getAuthEventId() {
+        return authEventId;
+    }
+
+    public void setAuthEventId(String authEventId) {
+        this.authEventId = authEventId;
     }
 
     public String getRand() {
@@ -140,5 +151,21 @@ public class AuthenticationContext {
 
     public boolean isExpired() {
         return System.currentTimeMillis() > expiresAt;
+    }
+
+    public int getSorCounter() {
+        return sorCounter;
+    }
+
+    public int getAndIncrementSorCounter() {
+        return sorCounter++;
+    }
+
+    public int getUpuCounter() {
+        return upuCounter;
+    }
+
+    public int getAndIncrementUpuCounter() {
+        return upuCounter++;
     }
 }

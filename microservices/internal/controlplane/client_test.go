@@ -202,7 +202,7 @@ func TestConfirmShouldReturnUnauthorizedWhenAuthenticationIsRejected(t *testing.
 func TestConfirmShouldPreserveEapFailurePayloadOnAuthenticationRejected(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.WriteHeader(http.StatusUnauthorized)
-		_, _ = writer.Write([]byte(`{"message":"EAP-AKA' verification failed","errorCode":"AUTHENTICATION_REJECTED","eapChallenge":"EAP-Failure"}`))
+		_, _ = writer.Write([]byte(`{"message":"EAP-AKA' verification failed","errorCode":"AUTHENTICATION_REJECTED","eapChallenge":"BAAABA"}`))
 	}))
 	defer server.Close()
 
@@ -217,8 +217,8 @@ func TestConfirmShouldPreserveEapFailurePayloadOnAuthenticationRejected(t *testi
 	if !ok {
 		t.Fatalf("error type = %T, want APIError", err)
 	}
-	if apiErr.EapPayload != "EAP-Failure" {
-		t.Fatalf("eap payload = %s, want EAP-Failure", apiErr.EapPayload)
+	if apiErr.EapPayload != "BAAABA" {
+		t.Fatalf("eap payload = %s, want BAAABA", apiErr.EapPayload)
 	}
 }
 

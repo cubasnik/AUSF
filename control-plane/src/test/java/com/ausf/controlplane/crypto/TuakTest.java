@@ -3,6 +3,7 @@ package com.ausf.controlplane.crypto;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -95,5 +96,31 @@ public class TuakTest {
         );
 
         assertEquals("topc must be exactly 64 hex characters", error.getMessage());
+    }
+
+    @Test
+    void autnEncodesExpectedStructureWithDefaultAmf() {
+        Tuak.TuakVector v = new Tuak().generateVector(RAND_61, K_61, TOPC_61, SQN_61, SN);
+        // AUTN = (SQN⊕AK) || AMF || MAC-A — 16 bytes = 32 hex chars
+        assertEquals(32, v.autn().length());
+        // AMF fixed at 0x8000 at nibbles [12:16]
+        assertEquals("8000", v.autn().substring(12, 16));
+    }
+
+    @Test
+    void generatedAutsCanBeValidatedAndRecoverOriginalSqn() {
+        Tuak tuak = new Tuak();
+        String auts = tuak.generateAuts(RAND_61, K_61, TOPC_61, SQN_61);
+
+        assertEquals(SQN_61, tuak.validateAutsAndRecoverSqn(RAND_61, auts, K_61, TOPC_61).orElseThrow());
+    }
+
+    @Test
+    void tamperedAutsIsRejected() {
+        Tuak tuak = new Tuak();
+        String auts = tuak.generateAuts(RAND_61, K_61, TOPC_61, SQN_61);
+        String tamperedAuts = auts.substring(0, auts.length() - 1) + (auts.endsWith("0") ? "1" : "0");
+
+        assertTrue(tuak.validateAutsAndRecoverSqn(RAND_61, tamperedAuts, K_61, TOPC_61).isEmpty());
     }
 }

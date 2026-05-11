@@ -110,6 +110,14 @@ func (handler Handler) authContextRoutes(writer http.ResponseWriter, request *ht
 		handler.confirm(writer, request, authCtxID, true)
 		return
 	}
+	if len(parts) == 2 && parts[1] == "sor-protection" && request.Method == http.MethodPut {
+		handler.sorProtection(writer, request, authCtxID)
+		return
+	}
+	if len(parts) == 2 && parts[1] == "upu-protection" && request.Method == http.MethodPut {
+		handler.upuProtection(writer, request, authCtxID)
+		return
+	}
 
 	writeProblem(writer, http.StatusNotFound, "Resource not found", "requested AUSF sub-resource is not implemented", "RESOURCE_UNKNOWN", request.URL.Path)
 }
@@ -166,6 +174,36 @@ func (handler Handler) deleteContext(writer http.ResponseWriter, authCtxID strin
 		return
 	}
 	writer.WriteHeader(http.StatusNoContent)
+}
+
+func (handler Handler) sorProtection(writer http.ResponseWriter, request *http.Request, authCtxID string) {
+	var info service.SoRInfo
+	if err := json.NewDecoder(request.Body).Decode(&info); err != nil {
+		writeProblem(writer, http.StatusBadRequest, "Invalid request", "request body is invalid", "MALFORMED_REQUEST", request.URL.Path)
+		return
+	}
+	result, err := handler.authService.SoRProtect(request.Context(), authCtxID, info)
+	if err != nil {
+		apiErr := err.(service.APIError)
+		writeProblem(writer, apiErr.StatusCode, "SoR protection failed", apiErr.Message, apiErr.Cause, request.URL.Path)
+		return
+	}
+	writeJSON(writer, http.StatusOK, result)
+}
+
+func (handler Handler) upuProtection(writer http.ResponseWriter, request *http.Request, authCtxID string) {
+	var info service.UPUInfo
+	if err := json.NewDecoder(request.Body).Decode(&info); err != nil {
+		writeProblem(writer, http.StatusBadRequest, "Invalid request", "request body is invalid", "MALFORMED_REQUEST", request.URL.Path)
+		return
+	}
+	result, err := handler.authService.UPUProtect(request.Context(), authCtxID, info)
+	if err != nil {
+		apiErr := err.(service.APIError)
+		writeProblem(writer, apiErr.StatusCode, "UPU protection failed", apiErr.Message, apiErr.Cause, request.URL.Path)
+		return
+	}
+	writeJSON(writer, http.StatusOK, result)
 }
 
 func writeJSON(writer http.ResponseWriter, status int, payload any) {

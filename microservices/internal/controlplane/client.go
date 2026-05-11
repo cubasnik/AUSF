@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	internaloauth2 "github.com/alexey/ausf/microservices/internal/oauth2"
 	"github.com/alexey/ausf/microservices/internal/tracing"
 	"github.com/alexey/ausf/microservices/internal/transport"
 )
@@ -29,6 +30,23 @@ type Client struct {
 	httpClient  *http.Client
 	breaker     *circuitBreaker
 	bearerToken string
+	tokenSource internaloauth2.TokenProvider
+}
+
+// WithTokenSource sets a dynamic token source for outbound Bearer tokens.
+// It takes precedence over the static bearerToken if both are set.
+func (client *Client) WithTokenSource(ts internaloauth2.TokenProvider) *Client {
+	client.tokenSource = ts
+	return client
+}
+
+func (client *Client) getToken() string {
+	if client.tokenSource != nil {
+		if tok, err := client.tokenSource.GetToken(); err == nil {
+			return tok
+		}
+	}
+	return client.bearerToken
 }
 
 type TLSClientConfig = transport.TLSClientConfig
@@ -162,8 +180,8 @@ func (client *Client) doJSONWithRetries(ctx context.Context, method string, path
 		if payload != nil {
 			httpRequest.Header.Set("Content-Type", "application/json")
 		}
-		if client.bearerToken != "" {
-			httpRequest.Header.Set("Authorization", "Bearer "+client.bearerToken)
+		if tok := client.getToken(); tok != "" {
+			httpRequest.Header.Set("Authorization", "Bearer "+tok)
 		}
 		if sc := tracing.SpanContextFromContext(ctx); sc.IsValid() {
 			httpRequest.Header.Set("traceparent", sc.Traceparent())

@@ -51,6 +51,14 @@ func (client stubControlPlaneClient) Context(_ context.Context, supi string) (co
 	return controlplane.AuthenticationResponse{}, nil
 }
 
+func (client stubControlPlaneClient) SoRProtect(_ context.Context, _ string, _ controlplane.SoRProtectionRequest) (controlplane.SoRProtectionResponse, error) {
+	return controlplane.SoRProtectionResponse{SoRMacIAUSF: "00000000000000000000000000000000", CounterSoR: "0000"}, nil
+}
+
+func (client stubControlPlaneClient) UPUProtect(_ context.Context, _ string, _ controlplane.UPUProtectionRequest) (controlplane.UPUProtectionResponse, error) {
+	return controlplane.UPUProtectionResponse{UPUMacIAUSF: "00000000000000000000000000000000", CounterUPU: "0000"}, nil
+}
+
 type stubNamfClient struct {
 	notifications []namf.UEAuthenticationStatusNotification
 	uris          []string
@@ -109,6 +117,72 @@ func TestConfirmShouldNotifyNamfOnSuccessfulAuthentication(t *testing.T) {
 	}
 	if namfClient.uris[0] != "http://mock-amf:8092/namf-comm/v1/ue-authentications/{authCtxId}/status-notify" {
 		t.Fatalf("notification uri = %s, want callback template", namfClient.uris[0])
+	}
+}
+
+func TestConfirmShouldNotifyNamfOnAuthenticationRejected(t *testing.T) {
+	namfClient := &stubNamfClient{}
+	authService := NewAuthService(stubControlPlaneClient{
+		confirmErr: controlplane.APIError{
+			StatusCode: http.StatusUnauthorized,
+			Message:    "RES* verification failed",
+			ErrorCode:  authenticationRejectedCause,
+		},
+	}, namfClient)
+	mustSaveContext(t, authService, AuthContext{
+		AuthCtxID:          "auth-1",
+		SUPI:               "imsi-250010000000001",
+		AuthType:           "5G_AKA",
+		ServingNetworkName: "5G:mnc001.mcc001.3gppnetwork.org",
+		NotificationURI:    "http://mock-amf:8092/namf-comm/v1/ue-authentications/{authCtxId}/status-notify",
+		Status:             "CHALLENGE_SENT",
+	})
+
+	_, err := authService.Confirm(context.Background(), "auth-1", "deadbeef", "", "")
+	if err == nil {
+		t.Fatal("Confirm() error = nil, want AUTHENTICATION_REJECTED error")
+	}
+	if len(namfClient.notifications) != 1 {
+		t.Fatalf("notifications = %d, want 1", len(namfClient.notifications))
+	}
+	if namfClient.notifications[0].AuthResult != "FAILURE" {
+		t.Fatalf("notification authResult = %s, want FAILURE", namfClient.notifications[0].AuthResult)
+	}
+	if namfClient.notifications[0].AuthCtxID != "auth-1" {
+		t.Fatalf("notification authCtxId = %s, want auth-1", namfClient.notifications[0].AuthCtxID)
+	}
+	if namfClient.notifications[0].KSEAF != "" {
+		t.Fatalf("notification kseaf = %s, want empty for FAILURE", namfClient.notifications[0].KSEAF)
+	}
+	if namfClient.uris[0] != "http://mock-amf:8092/namf-comm/v1/ue-authentications/{authCtxId}/status-notify" {
+		t.Fatalf("notification uri = %s, want callback template", namfClient.uris[0])
+	}
+}
+
+func TestConfirmShouldNotSendNotificationOnTransientControlPlaneError(t *testing.T) {
+	namfClient := &stubNamfClient{}
+	authService := NewAuthService(stubControlPlaneClient{
+		confirmErr: controlplane.APIError{
+			StatusCode: http.StatusServiceUnavailable,
+			Message:    "control plane unavailable",
+			ErrorCode:  "CONTROL_PLANE_UNAVAILABLE",
+		},
+	}, namfClient)
+	mustSaveContext(t, authService, AuthContext{
+		AuthCtxID:          "auth-1",
+		SUPI:               "imsi-250010000000001",
+		AuthType:           "5G_AKA",
+		ServingNetworkName: "5G:mnc001.mcc001.3gppnetwork.org",
+		NotificationURI:    "http://mock-amf:8092/namf-comm/v1/ue-authentications/{authCtxId}/status-notify",
+		Status:             "CHALLENGE_SENT",
+	})
+
+	_, err := authService.Confirm(context.Background(), "auth-1", "deadbeef", "", "")
+	if err == nil {
+		t.Fatal("Confirm() error = nil, want error")
+	}
+	if len(namfClient.notifications) != 0 {
+		t.Fatalf("notifications = %d, want 0 for transient error", len(namfClient.notifications))
 	}
 }
 
@@ -319,6 +393,14 @@ func (staleEapAfterRefreshControlPlaneClient) Confirm(_ context.Context, _ strin
 
 func (staleEapAfterRefreshControlPlaneClient) Context(_ context.Context, _ string) (controlplane.AuthenticationResponse, error) {
 	return controlplane.AuthenticationResponse{}, nil
+}
+
+func (staleEapAfterRefreshControlPlaneClient) SoRProtect(_ context.Context, _ string, _ controlplane.SoRProtectionRequest) (controlplane.SoRProtectionResponse, error) {
+	return controlplane.SoRProtectionResponse{}, nil
+}
+
+func (staleEapAfterRefreshControlPlaneClient) UPUProtect(_ context.Context, _ string, _ controlplane.UPUProtectionRequest) (controlplane.UPUProtectionResponse, error) {
+	return controlplane.UPUProtectionResponse{}, nil
 }
 
 func TestConfirmShouldRejectStaleEapResponseAfterReauthenticationRefresh(t *testing.T) {
@@ -602,6 +684,14 @@ func (staleFiveGAkaAfterResyncControlPlaneClient) Context(_ context.Context, _ s
 	return controlplane.AuthenticationResponse{}, nil
 }
 
+func (staleFiveGAkaAfterResyncControlPlaneClient) SoRProtect(_ context.Context, _ string, _ controlplane.SoRProtectionRequest) (controlplane.SoRProtectionResponse, error) {
+	return controlplane.SoRProtectionResponse{}, nil
+}
+
+func (staleFiveGAkaAfterResyncControlPlaneClient) UPUProtect(_ context.Context, _ string, _ controlplane.UPUProtectionRequest) (controlplane.UPUProtectionResponse, error) {
+	return controlplane.UPUProtectionResponse{}, nil
+}
+
 type staleAutsAfterResyncControlPlaneClient struct {
 	autsAttempts int
 }
@@ -643,6 +733,14 @@ func (client *staleAutsAfterResyncControlPlaneClient) Confirm(_ context.Context,
 
 func (client *staleAutsAfterResyncControlPlaneClient) Context(_ context.Context, _ string) (controlplane.AuthenticationResponse, error) {
 	return controlplane.AuthenticationResponse{}, nil
+}
+
+func (client *staleAutsAfterResyncControlPlaneClient) SoRProtect(_ context.Context, _ string, _ controlplane.SoRProtectionRequest) (controlplane.SoRProtectionResponse, error) {
+	return controlplane.SoRProtectionResponse{}, nil
+}
+
+func (client *staleAutsAfterResyncControlPlaneClient) UPUProtect(_ context.Context, _ string, _ controlplane.UPUProtectionRequest) (controlplane.UPUProtectionResponse, error) {
+	return controlplane.UPUProtectionResponse{}, nil
 }
 
 func TestConfirmShouldRejectStaleResStarAfterSyncFailureRefresh(t *testing.T) {

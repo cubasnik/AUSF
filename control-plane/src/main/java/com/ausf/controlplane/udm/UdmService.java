@@ -14,7 +14,6 @@ import org.springframework.stereotype.Service;
 @Service
 @ConditionalOnProperty(name = "ausf.udm.mode", havingValue = "mock", matchIfMissing = true)
 public class UdmService implements UdmClient {
-    private static final String EAP_AKA_PRIME_CHALLENGE_PREFIX = "EAP-Request/AKA'-Challenge";
 
     private final SubscriberRepository subscriberRepository;
     private final CryptographyService cryptographyService;
@@ -93,11 +92,8 @@ public class UdmService implements UdmClient {
                 sequenceNumber,
                 servingNetworkName
             );
-            String eapChallenge = "EAP_AKA_PRIME".equals(authType)
-                ? formatEapChallenge(v.rand(), v.autn(), v.hxresStar())
-                : null;
             return new AuthenticationVector(
-                authType, v.rand(), v.autn(), null, v.xresStar(), v.hxresStar(), v.kausf(), eapChallenge
+                authType, v.rand(), v.autn(), null, v.xresStar(), v.hxresStar(), v.kausf(), null
             );
         }
 
@@ -116,11 +112,8 @@ public class UdmService implements UdmClient {
                 sequenceNumber
             )
             : null;
-        String eapChallenge = "EAP_AKA_PRIME".equals(authType)
-            ? formatEapChallenge(v.rand(), v.autn(), v.hxresStar())
-            : null;
         return new AuthenticationVector(
-            authType, v.rand(), v.autn(), auts, v.xresStar(), v.hxresStar(), v.kausf(), eapChallenge
+            authType, v.rand(), v.autn(), auts, v.xresStar(), v.hxresStar(), v.kausf(), null
         );
     }
 
@@ -158,13 +151,4 @@ public class UdmService implements UdmClient {
             : AkaAlgorithm.defaultForAuthMethod(authType);
     }
 
-    private String formatEapChallenge(String rand, String autn, String hxresStar) {
-        return String.format(
-            "%s RAND=%s AUTN=%s HXRES*=%s",
-            EAP_AKA_PRIME_CHALLENGE_PREFIX,
-            rand,
-            autn,
-            hxresStar
-        );
-    }
 }

@@ -13,6 +13,7 @@ from smoke_runtime import (
     AUSF_CA_CERT_FILE,
     CONTROL_PLANE_BASE_URL,
     build_eap_aka_prime_response_payload,
+    get_eap_context,
     load_amf_notifications,
     load_control_plane_authentication_context,
     wait_for_health,
@@ -40,7 +41,8 @@ def main() -> int:
     )
     assert challenge["authType"] == "EAP_AKA_PRIME"
     control_plane_context = load_control_plane_authentication_context(supi)
-    eap_payload = build_eap_aka_prime_response_payload(control_plane_context["xresStar"])
+    eap_ctx = get_eap_context(supi, challenge["eapSession"]["payload"])
+    eap_payload = build_eap_aka_prime_response_payload(control_plane_context["xresStar"], eap_ctx)
 
     confirmed = client.confirm_eap_authentication(challenge["authCtxId"], eap_payload)
     print(f"confirmed: {confirmed}")

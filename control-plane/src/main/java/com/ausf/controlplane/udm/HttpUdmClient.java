@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ausf.controlplane.config.TlsAwareRestClientBuilderCustomizer;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -11,6 +12,7 @@ import java.util.function.Supplier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClientResponseException;
@@ -94,40 +96,100 @@ public class HttpUdmClient implements UdmClient {
         }
     }
 
+    @Override
+    public void confirmAuthEvent(
+        String supi,
+        String authEventId,
+        boolean success,
+        String authType,
+        String servingNetworkName
+    ) {
+        if (authEventId == null || authEventId.isBlank()) return;
+        try {
+            String baseUrl = resolveBaseUrl();
+            Map<String, Object> body = Map.of(
+                "success", success,
+                "timeStamp", Instant.now().toString(),
+                "authType", authType,
+                "servingNetworkName", servingNetworkName
+            );
+            restClientBuilder.baseUrl(baseUrl).build()
+                .put()
+                .uri("/nudm-ueau/v1/{supi}/auth-events/{authEventId}", supi, authEventId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(body)
+                .retrieve()
+                .toBodilessEntity();
+        } catch (Exception e) {
+            // best-effort: confirmation failure must not fail the authentication flow
+        }
+    }
+
+    @Override
+    public void deleteAuthEvent(String supi, String authEventId) {
+        if (authEventId == null || authEventId.isBlank()) return;
+        try {
+            String baseUrl = resolveBaseUrl();
+            restClientBuilder.baseUrl(baseUrl).build()
+                .delete()
+                .uri("/nudm-ueau/v1/{supi}/auth-events/{authEventId}", supi, authEventId)
+                .retrieve()
+                .toBodilessEntity();
+        } catch (Exception e) {
+            // best-effort: deletion failure must not fail the authentication flow
+        }
+    }
+
     private Optional<UdmAuthenticationData> requestAuthenticationData(
         String supi,
         String servingNetworkName,
         String authType,
         Object requestPayload
     ) {
-        UdmGenerateAuthDataResponse response = executeWithRetry(() -> restClientBuilder.baseUrl(Objects.requireNonNull(resolveBaseUrl())).build().post()
-            .uri("/nudm-ueau/v1/{supi}/security-information/generate-auth-data", supi)
-            .contentType(Objects.requireNonNull(MediaType.APPLICATION_JSON))
-            .body(requestPayload)
-            .retrieve()
-            .body(UdmGenerateAuthDataResponse.class));
+        ResponseEntity<UdmGenerateAuthDataResponse> entity = executeWithRetry(() ->
+            restClientBuilder.baseUrl(Objects.requireNonNull(resolveBaseUrl())).build().post()
+                .uri("/nudm-ueau/v1/{supi}/security-information/generate-auth-data", supi)
+                .contentType(Objects.requireNonNull(MediaType.APPLICATION_JSON))
+                .body(requestPayload)
+                .retrieve()
+                .toEntity(UdmGenerateAuthDataResponse.class));
 
+        UdmGenerateAuthDataResponse response = entity.getBody();
         if (response == null) {
             throw new IllegalStateException("UDM returned an empty authentication data response");
         }
 
+        // Support both flat (legacy/mock) and spec-compliant nested authVector format (TS 29.503)
+        UdmGenerateAuthDataResponse.NestedAuthVector av = response.getAuthVector();
+        String rand          = coalesce(response.getRand(),          av != null ? av.getRand()          : null);
+        String autn          = coalesce(response.getAutn(),          av != null ? av.getAutn()          : null);
+        String auts          = coalesce(response.getAuts(),          av != null ? av.getAuts()          : null);
+        String xresStar      = coalesce(response.getXresStar(),      av != null ? av.getXresStar()      : null);
+        String hxresStar     = coalesce(response.getHxresStar(),     av != null ? av.getHxresStar()     : null);
+        String kausf         = coalesce(response.getKausf(),         av != null ? av.getKausf()         : null);
+        String eapChallenge  = coalesce(response.getEapChallenge(),  av != null ? av.getEapChallenge()  : null);
+
         AuthenticationVector authenticationVector = new AuthenticationVector(
             coalesce(response.getAuthType(), authType),
-            response.getRand(),
-            response.getAutn(),
-            response.getAuts(),
-            response.getXresStar(),
-            response.getHxresStar(),
-            response.getKausf(),
-            response.getEapChallenge()
+            rand, autn, auts, xresStar, hxresStar, kausf, eapChallenge
         );
 
-        return Optional.of(new UdmAuthenticationData(
+        UdmAuthenticationData authData = new UdmAuthenticationData(
             coalesce(response.getSupi(), supi),
             coalesce(response.getAuthType(), authType),
             coalesce(response.getServingNetworkName(), servingNetworkName),
             authenticationVector
-        ));
+        );
+        authData.setAuthEventId(extractAuthEventId(entity.getHeaders().getFirst("Location")));
+        return Optional.of(authData);
+    }
+
+    private String extractAuthEventId(String location) {
+        if (location == null || location.isBlank()) return null;
+        int lastSlash = location.lastIndexOf('/');
+        if (lastSlash < 0 || lastSlash == location.length() - 1) return null;
+        String id = location.substring(lastSlash + 1).trim();
+        return id.isBlank() ? null : id;
     }
 
     private String coalesce(String primary, String fallback) {
@@ -361,6 +423,42 @@ public class HttpUdmClient implements UdmClient {
 
         public void setEapChallenge(String eapChallenge) {
             this.eapChallenge = eapChallenge;
+        }
+
+        private NestedAuthVector authVector;
+
+        public NestedAuthVector getAuthVector() {
+            return authVector;
+        }
+
+        public void setAuthVector(NestedAuthVector authVector) {
+            this.authVector = authVector;
+        }
+
+        /** Nested authentication-vector used by spec-compliant UDMs (TS 29.503 §6.1.6.2). */
+        static class NestedAuthVector {
+            private String rand;
+            private String autn;
+            private String auts;
+            private String xresStar;
+            private String hxresStar;
+            private String kausf;
+            private String eapChallenge;
+
+            public String getRand()          { return rand; }
+            public void   setRand(String v)  { this.rand = v; }
+            public String getAutn()          { return autn; }
+            public void   setAutn(String v)  { this.autn = v; }
+            public String getAuts()          { return auts; }
+            public void   setAuts(String v)  { this.auts = v; }
+            public String getXresStar()      { return xresStar; }
+            public void   setXresStar(String v) { this.xresStar = v; }
+            public String getHxresStar()     { return hxresStar; }
+            public void   setHxresStar(String v) { this.hxresStar = v; }
+            public String getKausf()         { return kausf; }
+            public void   setKausf(String v) { this.kausf = v; }
+            public String getEapChallenge()  { return eapChallenge; }
+            public void   setEapChallenge(String v) { this.eapChallenge = v; }
         }
     }
 }

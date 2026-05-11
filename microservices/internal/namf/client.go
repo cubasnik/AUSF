@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	internaloauth2 "github.com/alexey/ausf/microservices/internal/oauth2"
 	"github.com/alexey/ausf/microservices/internal/transport"
 )
 
@@ -20,6 +21,23 @@ type Client struct {
 	baseURL     string
 	httpClient  *http.Client
 	bearerToken string
+	tokenSource internaloauth2.TokenProvider
+}
+
+// WithTokenSource sets a dynamic token source for outbound Bearer tokens.
+// It takes precedence over the static bearerToken if both are set.
+func (client *Client) WithTokenSource(ts internaloauth2.TokenProvider) *Client {
+	client.tokenSource = ts
+	return client
+}
+
+func (client *Client) getToken() string {
+	if client.tokenSource != nil {
+		if tok, err := client.tokenSource.GetToken(); err == nil {
+			return tok
+		}
+	}
+	return client.bearerToken
 }
 
 type UEAuthenticationStatusNotification struct {
@@ -74,8 +92,8 @@ func (client *Client) NotifyUEAuthenticationStatus(notification UEAuthentication
 			return requestErr
 		}
 		request.Header.Set("Content-Type", "application/json")
-		if client.bearerToken != "" {
-			request.Header.Set("Authorization", "Bearer "+client.bearerToken)
+		if tok := client.getToken(); tok != "" {
+			request.Header.Set("Authorization", "Bearer "+tok)
 		}
 
 		response, requestErr := client.httpClient.Do(request)

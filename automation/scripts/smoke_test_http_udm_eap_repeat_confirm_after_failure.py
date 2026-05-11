@@ -7,7 +7,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from smoke_client import AUSFClient, AUSFError
-from smoke_runtime import AUSF_BASE_URL, EAP_AKA_PRIME_RESPONSE_PREFIX, MOCK_AMF_BASE_URL, MOCK_NRF_BASE_URL, MOCK_UDM_BASE_URL, load_amf_notifications, wait_for_health
+from smoke_runtime import AUSF_BASE_URL, MOCK_AMF_BASE_URL, MOCK_NRF_BASE_URL, MOCK_UDM_BASE_URL, build_eap_aka_prime_response_payload, get_eap_context, is_eap_failure, load_amf_notifications, wait_for_health
 
 
 def main() -> int:
@@ -30,14 +30,16 @@ def main() -> int:
     )
 
     try:
-        invalid_payload = f"{EAP_AKA_PRIME_RESPONSE_PREFIX}invalid-token"
+        eap_ctx = get_eap_context(supi, challenge["eapSession"]["payload"])
+        # Send all-zero RES* — server will reject
+        invalid_payload = build_eap_aka_prime_response_payload(bytes(16).hex(), eap_ctx)
         try:
             client.confirm_eap_authentication(challenge["authCtxId"], invalid_payload)
         except AUSFError as error:
             assert error.status_code == 401
             assert error.payload["cause"] == "AUTHENTICATION_REJECTED"
             assert error.payload["detail"] == "EAP-AKA' verification failed"
-            assert error.payload["eapPayload"] == "EAP-Failure"
+            assert is_eap_failure(error.payload["eapPayload"])
             print(f"eap-authentication-rejected-error: {error.payload}")
         else:
             raise AssertionError("expected 401 AUTHENTICATION_REJECTED for invalid eapPayload")
@@ -55,7 +57,7 @@ def main() -> int:
 
         stored_context = client.get_authentication_context(challenge["authCtxId"])
         assert stored_context["status"] == "FAILED"
-        assert stored_context["eapSession"]["payload"] == "EAP-Failure"
+        assert is_eap_failure(stored_context["eapSession"]["payload"])
         print(f"stored-context: {stored_context}")
 
         notifications = load_amf_notifications()[baseline_notification_count:]

@@ -2,13 +2,16 @@ package com.ausf.controlplane.udm;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static java.util.Objects.requireNonNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+import static org.springframework.http.HttpMethod.DELETE;
 import static org.springframework.http.HttpMethod.POST;
+import static org.springframework.http.HttpMethod.PUT;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.content;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
@@ -20,9 +23,11 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 import com.ausf.controlplane.config.TlsAwareRestClientBuilderCustomizer;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withNoContent;
 
 class HttpUdmClientTest {
     @Test
@@ -312,6 +317,186 @@ class HttpUdmClientTest {
         assertFalse(client.getAuthenticationData("missing", "5G:mnc001.mcc001.3gppnetwork.org", "5G_AKA").isPresent());
 
         assertEquals(UdmCircuitBreaker.State.CLOSED, client.circuitBreaker.getState());
+        server.verify();
+    }
+
+    @Test
+    void shouldExtractAuthEventIdFromLocationHeader() {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        NnrfClient nnrfClient = mock(NnrfClient.class);
+        HttpUdmClient client = new HttpUdmClient(builder, TlsAwareRestClientBuilderCustomizer.noop(), nnrfClient, "http://mock-udm:8090",
+            HttpUdmClient.DEFAULT_BREAKER_FAILURES, HttpUdmClient.DEFAULT_BREAKER_OPEN_SECONDS);
+
+        server.expect(requestTo("http://mock-udm:8090/nudm-ueau/v1/imsi-250010000000001/security-information/generate-auth-data"))
+            .andExpect(method(requireNonNull(POST)))
+            .andRespond(withSuccess(
+                """
+                {
+                  "supi": "imsi-250010000000001",
+                  "authType": "5G_AKA",
+                  "servingNetworkName": "5G:mnc001.mcc001.3gppnetwork.org",
+                  "rand": "rand",
+                  "autn": "autn",
+                  "xresStar": "xres",
+                  "hxresStar": "hxres",
+                  "kausf": "kausf"
+                }
+                """,
+                MediaType.APPLICATION_JSON
+            ).headers(new HttpHeaders() {{ set("Location",
+                "/nudm-ueau/v1/imsi-250010000000001/auth-events/event-uuid-001"); }}));
+
+        UdmAuthenticationData result = client.getAuthenticationData(
+            "imsi-250010000000001", "5G:mnc001.mcc001.3gppnetwork.org", "5G_AKA").orElseThrow();
+
+        assertEquals("event-uuid-001", result.getAuthEventId());
+        server.verify();
+    }
+
+    @Test
+    void shouldReturnNullAuthEventIdWhenLocationHeaderAbsent() {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        NnrfClient nnrfClient = mock(NnrfClient.class);
+        HttpUdmClient client = new HttpUdmClient(builder, TlsAwareRestClientBuilderCustomizer.noop(), nnrfClient, "http://mock-udm:8090",
+            HttpUdmClient.DEFAULT_BREAKER_FAILURES, HttpUdmClient.DEFAULT_BREAKER_OPEN_SECONDS);
+
+        server.expect(requestTo("http://mock-udm:8090/nudm-ueau/v1/imsi-250010000000001/security-information/generate-auth-data"))
+            .andExpect(method(requireNonNull(POST)))
+            .andRespond(withSuccess(
+                """
+                {
+                  "supi": "imsi-250010000000001",
+                  "authType": "5G_AKA",
+                  "servingNetworkName": "5G:mnc001.mcc001.3gppnetwork.org",
+                  "rand": "rand",
+                  "autn": "autn",
+                  "xresStar": "xres",
+                  "hxresStar": "hxres",
+                  "kausf": "kausf"
+                }
+                """,
+                MediaType.APPLICATION_JSON
+            ));
+
+        UdmAuthenticationData result = client.getAuthenticationData(
+            "imsi-250010000000001", "5G:mnc001.mcc001.3gppnetwork.org", "5G_AKA").orElseThrow();
+
+        assertNull(result.getAuthEventId());
+        server.verify();
+    }
+
+    @Test
+    void shouldDeserializeNestedAuthVectorFromSpecCompliantResponse() {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        NnrfClient nnrfClient = mock(NnrfClient.class);
+        HttpUdmClient client = new HttpUdmClient(builder, TlsAwareRestClientBuilderCustomizer.noop(), nnrfClient, "http://mock-udm:8090",
+            HttpUdmClient.DEFAULT_BREAKER_FAILURES, HttpUdmClient.DEFAULT_BREAKER_OPEN_SECONDS);
+
+        server.expect(requestTo("http://mock-udm:8090/nudm-ueau/v1/imsi-250010000000001/security-information/generate-auth-data"))
+            .andExpect(method(requireNonNull(POST)))
+            .andRespond(withSuccess(
+                """
+                {
+                  "supi": "imsi-250010000000001",
+                  "authType": "5G_AKA",
+                  "servingNetworkName": "5G:mnc001.mcc001.3gppnetwork.org",
+                  "authVector": {
+                    "rand": "nested-rand",
+                    "autn": "nested-autn",
+                    "xresStar": "nested-xres",
+                    "hxresStar": "nested-hxres",
+                    "kausf": "nested-kausf"
+                  }
+                }
+                """,
+                MediaType.APPLICATION_JSON
+            ));
+
+        UdmAuthenticationData result = client.getAuthenticationData(
+            "imsi-250010000000001", "5G:mnc001.mcc001.3gppnetwork.org", "5G_AKA").orElseThrow();
+
+        assertEquals("nested-rand",  result.getAuthenticationVector().getRand());
+        assertEquals("nested-kausf", result.getAuthenticationVector().getKausf());
+        server.verify();
+    }
+
+    @Test
+    void shouldSendConfirmAuthEventAsPut() {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        NnrfClient nnrfClient = mock(NnrfClient.class);
+        HttpUdmClient client = new HttpUdmClient(builder, TlsAwareRestClientBuilderCustomizer.noop(), nnrfClient, "http://mock-udm:8090",
+            HttpUdmClient.DEFAULT_BREAKER_FAILURES, HttpUdmClient.DEFAULT_BREAKER_OPEN_SECONDS);
+
+        server.expect(requestTo("http://mock-udm:8090/nudm-ueau/v1/imsi-250010000000001/auth-events/event-abc"))
+            .andExpect(method(requireNonNull(PUT)))
+            .andRespond(withSuccess("{}", MediaType.APPLICATION_JSON));
+
+        client.confirmAuthEvent("imsi-250010000000001", "event-abc", true, "5G_AKA", "5G:mnc001.mcc001.3gppnetwork.org");
+        server.verify();
+    }
+
+    @Test
+    void shouldNotPropagateExceptionFromConfirmAuthEventOnServerError() {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        NnrfClient nnrfClient = mock(NnrfClient.class);
+        HttpUdmClient client = new HttpUdmClient(builder, TlsAwareRestClientBuilderCustomizer.noop(), nnrfClient, "http://mock-udm:8090",
+            HttpUdmClient.DEFAULT_BREAKER_FAILURES, HttpUdmClient.DEFAULT_BREAKER_OPEN_SECONDS);
+
+        server.expect(requestTo("http://mock-udm:8090/nudm-ueau/v1/imsi-250010000000001/auth-events/event-abc"))
+            .andExpect(method(requireNonNull(PUT)))
+            .andRespond(withServerError());
+
+        // best-effort: must not throw
+        client.confirmAuthEvent("imsi-250010000000001", "event-abc", false, "5G_AKA", "5G:mnc001.mcc001.3gppnetwork.org");
+        server.verify();
+    }
+
+    @Test
+    void shouldSkipConfirmAuthEventWhenAuthEventIdIsBlank() {
+        NnrfClient nnrfClient = mock(NnrfClient.class);
+        HttpUdmClient client = new HttpUdmClient(RestClient.builder(), TlsAwareRestClientBuilderCustomizer.noop(), nnrfClient, "http://mock-udm:8090",
+            HttpUdmClient.DEFAULT_BREAKER_FAILURES, HttpUdmClient.DEFAULT_BREAKER_OPEN_SECONDS);
+
+        // No exception and no HTTP call expected
+        client.confirmAuthEvent("imsi-250010000000001", null, true, "5G_AKA", "5G:mnc001.mcc001.3gppnetwork.org");
+        client.confirmAuthEvent("imsi-250010000000001", "",   true, "5G_AKA", "5G:mnc001.mcc001.3gppnetwork.org");
+    }
+
+    @Test
+    void shouldSendDeleteAuthEventAsDelete() {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        NnrfClient nnrfClient = mock(NnrfClient.class);
+        HttpUdmClient client = new HttpUdmClient(builder, TlsAwareRestClientBuilderCustomizer.noop(), nnrfClient, "http://mock-udm:8090",
+            HttpUdmClient.DEFAULT_BREAKER_FAILURES, HttpUdmClient.DEFAULT_BREAKER_OPEN_SECONDS);
+
+        server.expect(requestTo("http://mock-udm:8090/nudm-ueau/v1/imsi-250010000000001/auth-events/event-xyz"))
+            .andExpect(method(requireNonNull(DELETE)))
+            .andRespond(withNoContent());
+
+        client.deleteAuthEvent("imsi-250010000000001", "event-xyz");
+        server.verify();
+    }
+
+    @Test
+    void shouldNotPropagateExceptionFromDeleteAuthEventOnServerError() {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        NnrfClient nnrfClient = mock(NnrfClient.class);
+        HttpUdmClient client = new HttpUdmClient(builder, TlsAwareRestClientBuilderCustomizer.noop(), nnrfClient, "http://mock-udm:8090",
+            HttpUdmClient.DEFAULT_BREAKER_FAILURES, HttpUdmClient.DEFAULT_BREAKER_OPEN_SECONDS);
+
+        server.expect(requestTo("http://mock-udm:8090/nudm-ueau/v1/imsi-250010000000001/auth-events/event-xyz"))
+            .andExpect(method(requireNonNull(DELETE)))
+            .andRespond(withServerError());
+
+        // best-effort: must not throw
+        client.deleteAuthEvent("imsi-250010000000001", "event-xyz");
         server.verify();
     }
 

@@ -2,6 +2,7 @@ package com.ausf.controlplane.crypto;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.util.OptionalLong;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 
@@ -508,5 +509,64 @@ public class Tuak {
         StringBuilder sb = new StringBuilder(bytes.length * 2);
         for (byte b : bytes) sb.append(String.format("%02x", b));
         return sb.toString();
+    }
+
+    // ── AUTS (resynchronization) ───────────────────────────────────────────────
+
+    /**
+     * Generate AUTS for a synchronization failure response (TS 35.231).
+     * AUTS = (SQN ⊕ AK*) || MAC-S  where AMF* = 0x0000.
+     *
+     * @return 14-byte AUTS as 28 hex chars
+     */
+    public String generateAuts(String rand, String permanentKey, String topc, long sqn) {
+        requireHexLength(rand, 32, "rand");
+        requireSupportedKeyLength(permanentKey);
+        requireHexLength(topc, 64, "topc");
+
+        byte[] akStar = hexToBytes(generateAkStar(rand, permanentKey, topc));
+        byte[] sqnBytes = sqnToBytes(sqn);
+        byte[] sqnXorAkStar = xor(sqnBytes, akStar);
+        // MAC-S uses AMF* = 0x0000 for resynchronization per TS 35.231
+        byte[] macS = hexToBytes(generateMacS(rand, permanentKey, topc, sqn, "0000"));
+        return bytesToHex(concat(sqnXorAkStar, macS));
+    }
+
+    /**
+     * Verify AUTS MAC-S and recover the UE's SQN (TS 35.231).
+     *
+     * @return the recovered SQN, or empty if MAC-S verification fails
+     */
+    public OptionalLong validateAutsAndRecoverSqn(
+        String rand, String auts, String permanentKey, String topc
+    ) {
+        if (auts == null || auts.isBlank() || auts.length() != 28) {
+            return OptionalLong.empty();
+        }
+        requireHexLength(rand, 32, "rand");
+        requireSupportedKeyLength(permanentKey);
+        requireHexLength(topc, 64, "topc");
+
+        byte[] autsBytes = hexToBytes(auts);
+        byte[] sqnXorAkStar = subarray(autsBytes, 0, 6);
+        byte[] providedMacS = subarray(autsBytes, 6, 8);
+
+        byte[] akStar = hexToBytes(generateAkStar(rand, permanentKey, topc));
+        byte[] recoveredSqnBytes = xor(sqnXorAkStar, akStar);
+        long recoveredSqn = bytesToSqn(recoveredSqnBytes);
+
+        byte[] expectedMacS = hexToBytes(generateMacS(rand, permanentKey, topc, recoveredSqn, "0000"));
+        if (!MessageDigest.isEqual(expectedMacS, providedMacS)) {
+            return OptionalLong.empty();
+        }
+        return OptionalLong.of(recoveredSqn);
+    }
+
+    private static long bytesToSqn(byte[] sqnBytes) {
+        long result = 0;
+        for (byte b : sqnBytes) {
+            result = (result << 8) | (b & 0xFFL);
+        }
+        return result;
     }
 }

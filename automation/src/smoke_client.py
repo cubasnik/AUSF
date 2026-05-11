@@ -72,6 +72,60 @@ class AUSFClient:
     def delete_authentication_context(self, auth_ctx_id: str) -> None:
         self._call("DELETE", f"/nausf-auth/v1/ue-authentications/{auth_ctx_id}")
 
+    def sor_protection(
+        self,
+        auth_ctx_id: str,
+        steering_container: str,
+        ack_indication: bool = False,
+        sor_header: str | None = None,
+        storage_indicator: str | None = None,
+        provisioning_3gpp_ind: bool | None = None,
+    ) -> dict:
+        """Nausf_SoRProtection (TS 29.509 §6.2) — PUT sor-protection.
+
+        Optional OAS3 fields (Table 6.2.6.2.2-1):
+          sor_header          — SOR header (hex), included in MAC computation when present.
+          storage_indicator   — echoed back in the response (TS 29.509 §6.2.6.2.2).
+          provisioning_3gpp_ind — indicates 3GPP provisioning list.
+        """
+        payload: dict = {"steeringContainer": steering_container, "ackIndication": ack_indication}
+        if sor_header is not None:
+            payload["sorHeader"] = sor_header
+        if storage_indicator is not None:
+            payload["storageIndicator"] = storage_indicator
+        if provisioning_3gpp_ind is not None:
+            payload["provisioning3gppInd"] = provisioning_3gpp_ind
+        return self._call(
+            "PUT",
+            f"/nausf-auth/v1/ue-authentications/{auth_ctx_id}/sor-protection",
+            payload,
+        )
+
+    def upu_protection(
+        self,
+        auth_ctx_id: str,
+        upu_data: str,
+        ack_indication: bool = False,
+        upu_header: str | None = None,
+        provisioning_3gpp_ind: bool | None = None,
+    ) -> dict:
+        """Nausf_UPUProtection (TS 29.509 §6.3) — PUT upu-protection.
+
+        Optional OAS3 fields (Table 6.3.6.2.2-1):
+          upu_header          — UPU header (hex), included in MAC computation when present.
+          provisioning_3gpp_ind — indicates 3GPP provisioning list.
+        """
+        payload: dict = {"upuData": upu_data, "ackIndication": ack_indication}
+        if upu_header is not None:
+            payload["upuHeader"] = upu_header
+        if provisioning_3gpp_ind is not None:
+            payload["provisioning3gppInd"] = provisioning_3gpp_ind
+        return self._call(
+            "PUT",
+            f"/nausf-auth/v1/ue-authentications/{auth_ctx_id}/upu-protection",
+            payload,
+        )
+
     def _call(self, method: str, path: str, payload: dict | None = None) -> dict:
         body = None
         headers = {}

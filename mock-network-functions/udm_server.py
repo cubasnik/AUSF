@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 import threading
+import uuid
 
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -27,6 +28,8 @@ def load_subscribers() -> dict[str, dict]:
 SUBSCRIBERS = load_subscribers()
 SUBSCRIBERS_LOCK = threading.Lock()
 LATEST_AUTH_DATA: dict[str, dict] = {}
+_auth_events: dict[str, dict] = {}
+_AUTH_EVENTS_LOCK = threading.Lock()
 
 
 def digest_hex(value: str) -> str:
@@ -122,7 +125,55 @@ class Handler(BaseHTTPRequestHandler):
             LATEST_AUTH_DATA[supi] = response
             subscriber["sequenceNumber"] = int(subscriber["sequenceNumber"]) + 1
 
-        self.write_json(200, response)
+        auth_event_id = str(uuid.uuid4())
+        with _AUTH_EVENTS_LOCK:
+            _auth_events[auth_event_id] = {"supi": supi}
+        location = f"/nudm-ueau/v1/{supi}/auth-events/{auth_event_id}"
+        encoded = json.dumps(response).encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(encoded)))
+        self.send_header("Location", location)
+        self.end_headers()
+        self.wfile.write(encoded)
+
+    def do_PUT(self) -> None:
+        prefix = "/nudm-ueau/v1/"
+        auth_events_marker = "/auth-events/"
+        if not self.path.startswith(prefix) or auth_events_marker not in self.path:
+            self.write_json(404, {"detail": "not found"})
+            return
+
+        # /nudm-ueau/v1/{supi}/auth-events/{authEventId}
+        rest = self.path[len(prefix):]
+        marker_pos = rest.find(auth_events_marker)
+        supi = rest[:marker_pos]
+        auth_event_id = rest[marker_pos + len(auth_events_marker):].strip("/")
+
+        content_length = int(self.headers.get("Content-Length", "0"))
+        body = json.loads(self.rfile.read(content_length) or b"{}")
+        with _AUTH_EVENTS_LOCK:
+            if auth_event_id not in _auth_events:
+                self.write_json(404, {"detail": f"auth event {auth_event_id} not found"})
+                return
+            _auth_events[auth_event_id].update(body)
+        self.write_json(200, _auth_events.get(auth_event_id, {}))
+
+    def do_DELETE(self) -> None:
+        prefix = "/nudm-ueau/v1/"
+        auth_events_marker = "/auth-events/"
+        if not self.path.startswith(prefix) or auth_events_marker not in self.path:
+            self.write_json(404, {"detail": "not found"})
+            return
+
+        rest = self.path[len(prefix):]
+        marker_pos = rest.find(auth_events_marker)
+        auth_event_id = rest[marker_pos + len(auth_events_marker):].strip("/")
+
+        with _AUTH_EVENTS_LOCK:
+            _auth_events.pop(auth_event_id, None)
+        self.send_response(204)
+        self.end_headers()
 
     def log_message(self, format: str, *args) -> None:
         return
