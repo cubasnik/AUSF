@@ -20,6 +20,8 @@ public class AuthenticationContext {
     private final long expiresAt;
     private int sorCounter;
     private int upuCounter;
+    private int syncFailureCount;
+    private int eapOngoingCount;
 
     public AuthenticationContext(String authCtxId, String supi) {
         this.authCtxId = authCtxId;
@@ -167,5 +169,21 @@ public class AuthenticationContext {
 
     public int getAndIncrementUpuCounter() {
         return upuCounter++;
+    }
+
+    public int getSyncFailureCount() {
+        return syncFailureCount;
+    }
+
+    public int incrementAndGetSyncFailureCount() {
+        return ++syncFailureCount;
+    }
+
+    public int getEapOngoingCount() {
+        return eapOngoingCount;
+    }
+
+    public int incrementAndGetEapOngoingCount() {
+        return ++eapOngoingCount;
     }
 }

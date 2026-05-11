@@ -189,8 +189,8 @@
 
 | # | Задача | Уровень | Описание пробела |
 |---|--------|---------|------------------|
-| А | **Полный конечный автомат 5G AKA по TS 33.501** | Go + Java | Минимальный путь `AUTS → SYNC_FAILURE → refreshed challenge` работает. Не покрыты: счётчик попыток повторной синхронизации, лимиты попыток, MAC-F (AUTN failure), полная обработка всех ошибок AUTN согласно TS 33.501 §6.1.3 |
-| Б | **Полный конечный автомат EAP-AKA' по TS 33.501** | Go + Java | Минимальные потоки sync-failure, re-auth и fast re-auth работают. Не покрыты: полная семантика состояний TS 33.501 §6.1.3, интероперабельность с реальным UE |
+| ~~А~~ | ~~**Полный конечный автомат 5G AKA по TS 33.501**~~ ✅ | Go + Java | ~~Не покрыты: счётчик попыток повторной синхронизации, лимиты попыток~~. Реализованы: `syncFailureCount` в `AuthenticationContext`, `maxSyncFailures` в `AuthenticationManager` (`ausf.auth.maxSyncFailures`, env `AUSF_AUTH_MAX_SYNC_FAILURES`; 0 = без лимита). Превышение лимита → `AUTHENTICATION_REJECTED` «max SYNC_FAILURE attempts exceeded». Примечание: MAC-F (AUTN MAC-A mismatch) обрабатывается на стороне AMF — до AUSF не доходит согласно TS 33.501 §6.1.3.2. |
+| ~~Б~~ | ~~**Полный конечный автомат EAP-AKA' по TS 33.501**~~ ✅ | Go + Java | ~~Не покрыты: полная семантика состояний TS 33.501 §6.1.3~~. Реализованы: `eapOngoingCount` в `AuthenticationContext`, `maxEapOngoing` в `AuthenticationManager` (`ausf.auth.maxEapOngoing`, env `AUSF_AUTH_MAX_EAP_ONGOING`; 0 = без лимита). Превышение лимита → `AUTHENTICATION_REJECTED` + EAP-Failure payload. Тесты: `shouldRejectFiveGAkaSyncFailureWhenMaxAttemptsExceeded`, `shouldRejectEapAkaPrimeOngoingWhenMaxRoundTripsExceeded`. |
 
 ### Горизонт 2 — Надёжность и наблюдаемость
 

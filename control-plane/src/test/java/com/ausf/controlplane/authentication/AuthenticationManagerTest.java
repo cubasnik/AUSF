@@ -513,6 +513,74 @@ class AuthenticationManagerTest {
         assertEquals(AuthenticationStatus.FAILED, authenticationManager.getContext(FIVE_G_AKA_SUPI).getStatus());
     }
 
+    @Test
+    void shouldRejectFiveGAkaSyncFailureWhenMaxAttemptsExceeded() {
+        AuthenticationManager limitedManager = new AuthenticationManager(cryptographyService, udmService);
+        limitedManager.maxSyncFailures = 1;
+
+        AuthenticationResponse firstChallenge = limitedManager.initiateAuthentication(
+            "auth-1", FIVE_G_AKA_SUPI, "5G:mnc001.mcc001.3gppnetwork.org", "5G_AKA"
+        );
+        // Use the server-precomputed AUTS stored in the context
+        String auts1 = limitedManager.getContext(FIVE_G_AKA_SUPI).getAuts();
+
+        // First SYNC_FAILURE: allowed (count = 1, limit = 1)
+        AuthenticationResponse resyncChallenge = limitedManager.verifyAuthenticationResponse(
+            firstChallenge.getAuthCtxId(), null, auts1, null
+        );
+        assertTrue(resyncChallenge.getSuccess(), "first sync-failure should be allowed");
+
+        // Read the server-precomputed AUTS for the new challenge
+        String auts2 = limitedManager.getContext(FIVE_G_AKA_SUPI).getAuts();
+
+        // Second SYNC_FAILURE: rejected (count = 2 > limit = 1)
+        AuthenticationResponse result = limitedManager.verifyAuthenticationResponse(
+            resyncChallenge.getAuthCtxId(), null, auts2, null
+        );
+        assertFalse(result.getSuccess());
+        assertEquals("AUTHENTICATION_REJECTED", result.getErrorCode());
+        assertTrue(result.getMessage().contains("max SYNC_FAILURE attempts exceeded"),
+            "message should indicate limit exceeded; was: " + result.getMessage());
+        assertEquals(AuthenticationStatus.FAILED, limitedManager.getContext(FIVE_G_AKA_SUPI).getStatus());
+    }
+
+    @Test
+    void shouldRejectEapAkaPrimeOngoingWhenMaxRoundTripsExceeded() {
+        AuthenticationManager limitedManager = new AuthenticationManager(cryptographyService, udmService);
+        limitedManager.maxEapOngoing = 1;
+
+        String supi = "imsi-250010000000002";
+        AuthenticationResponse challenge = limitedManager.initiateAuthentication(
+            "auth-1", supi, "5G:mnc001.mcc001.3gppnetwork.org", "EAP_AKA_PRIME"
+        );
+        AuthenticationContext ctx = limitedManager.getContext(supi);
+        byte[] kAutPrime = cryptographyService.deriveKautPrime(ctx.getKausf());
+        byte id = EapPacket.extractIdentifier(challenge.getEapChallenge());
+        String reauthResponse = EapPacket.buildReauthenticationResponse(id, kAutPrime, false);
+
+        // First re-auth: allowed (count = 1, limit = 1)
+        AuthenticationResponse refreshedChallenge = limitedManager.verifyAuthenticationResponse(
+            challenge.getAuthCtxId(), null, null, reauthResponse
+        );
+        assertTrue(refreshedChallenge.getSuccess(), "first re-auth should be allowed");
+        assertEquals("EAP-AKA' re-authentication challenge generated", refreshedChallenge.getMessage());
+
+        // Second re-auth: rejected (count = 2 > limit = 1)
+        ctx = limitedManager.getContext(supi);
+        byte[] kAutPrime2 = cryptographyService.deriveKautPrime(ctx.getKausf());
+        byte id2 = EapPacket.extractIdentifier(refreshedChallenge.getEapChallenge());
+        String secondReauthResponse = EapPacket.buildReauthenticationResponse(id2, kAutPrime2, false);
+        AuthenticationResponse result = limitedManager.verifyAuthenticationResponse(
+            challenge.getAuthCtxId(), null, null, secondReauthResponse
+        );
+        assertFalse(result.getSuccess());
+        assertEquals("AUTHENTICATION_REJECTED", result.getErrorCode());
+        assertTrue(result.getMessage().contains("max ongoing round-trips exceeded"),
+            "message should indicate limit exceeded; was: " + result.getMessage());
+        assertNotNull(result.getEapChallenge(), "should include EAP-Failure payload");
+        assertEquals(AuthenticationStatus.FAILED, limitedManager.getContext(supi).getStatus());
+    }
+
     private static final class InMemorySubscriberRepository implements SubscriberRepository {
         private final Map<String, SubscriberProfile> subscribers = new ConcurrentHashMap<>();
 

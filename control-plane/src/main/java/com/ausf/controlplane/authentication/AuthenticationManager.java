@@ -10,12 +10,29 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 @Service
 public class AuthenticationManager {
 
     private static final String SUCI_PREFIX = "suci-";
+
+    /**
+     * Maximum number of SYNC_FAILURE (AUTS / SQN resync) cycles per auth context.
+     * 0 means unlimited (default for backward compatibility).
+     * Configurable via {@code ausf.auth.maxSyncFailures} property.
+     */
+    @Value("${ausf.auth.maxSyncFailures:0}")
+    int maxSyncFailures;
+
+    /**
+     * Maximum number of EAP-AKA' ongoing round-trips (re-auth + fast-reauth + sync-failure)
+     * per auth context. 0 means unlimited.
+     * Configurable via {@code ausf.auth.maxEapOngoing} property.
+     */
+    @Value("${ausf.auth.maxEapOngoing:0}")
+    int maxEapOngoing;
 
     private final Map<String, AuthenticationContext> authContexts = new ConcurrentHashMap<>();
     private final Map<String, String> latestAuthCtxIdsBySupi = new ConcurrentHashMap<>();
@@ -220,6 +237,17 @@ public class AuthenticationManager {
     }
 
     private AuthenticationResponse regenerateEapAkaPrimeChallenge(AuthenticationContext context, boolean fastReauthentication) {
+        int newCount = context.incrementAndGetEapOngoingCount();
+        if (maxEapOngoing > 0 && newCount > maxEapOngoing) {
+            context.setStatus(AuthenticationStatus.FAILED);
+            notifyAuthResult(context, false);
+            return AuthenticationResponse.failure(
+                "EAP-AKA' max ongoing round-trips exceeded (" + maxEapOngoing + ")",
+                "AUTHENTICATION_REJECTED",
+                buildEapFailure(context)
+            );
+        }
+
         Optional<UdmAuthenticationData> udmAuthenticationData;
         try {
             udmAuthenticationData = udmClient.getAuthenticationData(
@@ -272,6 +300,18 @@ public class AuthenticationManager {
     }
 
     private AuthenticationResponse regenerateChallenge(AuthenticationContext context, String auts) {
+        int newCount = context.incrementAndGetSyncFailureCount();
+        if (maxSyncFailures > 0 && newCount > maxSyncFailures) {
+            context.setStatus(AuthenticationStatus.FAILED);
+            notifyAuthResult(context, false);
+            String eapFailure = "EAP_AKA_PRIME".equals(context.getAuthType()) ? buildEapFailure(context) : null;
+            return AuthenticationResponse.failure(
+                "max SYNC_FAILURE attempts exceeded (" + maxSyncFailures + ")",
+                "AUTHENTICATION_REJECTED",
+                eapFailure
+            );
+        }
+
         Optional<UdmAuthenticationData> udmAuthenticationData;
         try {
             udmAuthenticationData = udmClient.resynchronizeAuthenticationData(
