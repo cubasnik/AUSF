@@ -207,6 +207,12 @@ def main() -> int:
         [PYTHON, "automation/scripts/smoke_test_flyway_migration.py"],
     )
 
+    # Горизонт 10: Redis Namf queue failover (manages its own compose stack).
+    run_python_step(
+        "Redis Namf queue failover smoke test",
+        [PYTHON, "automation/scripts/smoke_test_redis_failover.py"],
+    )
+
     print("==> full validation completed", flush=True)
     return 0
 

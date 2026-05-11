@@ -77,12 +77,18 @@ NEGATIVE_SCRIPTS = [
     "automation/scripts/smoke_test_http_udm_upu_protection.py",
     "automation/scripts/smoke_test_http_udm_upu_protection_optional_fields.py",
 ]
-SMOKE_SCRIPTS = HAPPY_PATH_SCRIPTS + NEGATIVE_SCRIPTS
+# Горизонт 10: concurrent 5G-AKA authentication (20 parallel threads).
+CONCURRENCY_SCRIPTS = [
+    "automation/scripts/smoke_test_concurrent_auth.py",
+]
+SMOKE_SCRIPTS = HAPPY_PATH_SCRIPTS + NEGATIVE_SCRIPTS + CONCURRENCY_SCRIPTS
 HOST_LEVEL_SCRIPTS = [
     "automation/scripts/smoke_test_http_udm_context_survives_restart.py",
     "automation/scripts/smoke_test_http_udm_context_ttl_expired.py",
     # Горизонт 8: retry-queue drain, SIGHUP cert-reload, Flyway migration
     "automation/scripts/smoke_test_namf_retry_queue.py",
+    # Горизонт 10: circuit-breaker chaos (control-plane down)
+    "automation/scripts/smoke_test_chaos_control_plane_down.py",
 ]
 RESET_SERVICES_AFTER_SCRIPT = {
     "automation/scripts/smoke_test_http_udm_upstream_unavailable.py": ["ausf-control-plane"],

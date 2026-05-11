@@ -196,6 +196,9 @@
 | 29 | ~~SBOM: `anchore/syft-action` CycloneDX JSON для обоих образов в `release.yml`; артефакты прикреплены к релизу; `dependency-review-action` в `dependency-review.yml` блокирует PR с CRITICAL CVE~~ ✅ | — | GitHub Actions |
 | 30 | ~~Dependabot: `.github/dependabot.yml` — еженедельные PR на обновление Go modules, Maven, Docker base-images, GitHub Actions~~ ✅ | — | GitHub / DevEx |
 | 31 | ~~OpenAPI request validation middleware: `withRequestValidation` — `//go:embed schema/nausf-auth-v1.yaml`; required-field + type + enum проверка; `400 ProblemDetails{invalidParams}` per TS 29.500 §6.6.4; 5 тестов~~ ✅ | — | Go microservice |
+| 32 | ~~Circuit-breaker chaos smoke test (`smoke_test_chaos_control_plane_down.py`): kill control-plane → 5×502 trip → 503 open-breaker assert → restart → wait reset → auth SUCCESS~~ ✅ | — | Automation (Python) |
+| 33 | ~~Redis Namf retry-queue failover smoke test (`smoke_test_redis_failover.py`): Redis-backed queue overlay → stop mock-amf + Redis mid-auth → confirm SUCCESS, no panic, health ok~~ ✅ | — | Automation (Python) |
+| 34 | ~~Concurrent 5G-AKA smoke test (`smoke_test_concurrent_auth.py`): 20 parallel threads, one SUPI each → all `authResult=SUCCESS`, no cross-contaminated `xresStar`~~ ✅ | — | Automation (Python) |
 
 ---
 
@@ -229,8 +232,4 @@
 
 ### Горизонт 10 — Chaos & resilience smoke tests
 
-| # | Задача | Уровень | Описание |
-|---|--------|---------|----------|
-| Н | **`smoke_test_chaos_control_plane_down.py`** | Automation (Python) | Kill control-plane mid-auth → circuit breaker открывается, AUSF возвращает 503 → перезапуск control-plane → half-open → следующий auth проходит |
-| О | **`smoke_test_redis_failover.py`** | Automation (Python) | Redis-queue-mode: stop Redis → confirm auth → AUSF переходит на in-memory fallback (нет паники, лог warning) → start Redis → drain очереди |
-| П | **`smoke_test_concurrent_auth.py`** | Automation (Python) | 20 параллельных `threading.Thread`, по одному SUPI каждый → initiate+confirm → все `authResult=SUCCESS`, без data-race и без перепутанных `xresStar` |
+Все задачи горизонта выполнены — см. «Выполненные задачи» #32–34.
