@@ -196,7 +196,7 @@
 
 | # | Задача | Уровень | Описание пробела |
 |---|--------|---------|------------------|
-| В | **Распределённая трассировка OpenTelemetry (полная)** | Go + Java | `X-Trace-Id` и `traceparent` передаются в заголовках Go, но полноценный OTel SDK (spans, exporters, OTLP/Jaeger) не подключён в Java |
+| ~~В~~ | ~~**Распределённая трассировка OpenTelemetry (полная)**~~ ✅ | Go + Java | Реализовано: `spring-boot-starter-actuator` + `micrometer-tracing-bridge-otel` + `opentelemetry-exporter-otlp` в Java control-plane. W3C `traceparent` из Go microservice принимается и автоматически линкует входящий запрос как родительский span. `ObservabilityConfig` с `ObservedAspect` + `@Observed` на `AuthenticationManager.initiateAuthentication` / `verifyAuthenticationResponse` — кастомные spans с атрибутами. Outbound RestClient (UDM, NRF) автоматически инструментируется и инжектирует `traceparent`. Экспорт OTLP/HTTP → `AUSF_OTEL_ENDPOINT` (по умолч. `http://localhost:4318/v1/traces`). Сэмплирование `AUSF_OTEL_SAMPLING` (по умолч. 1.0). trace-id/span-id в MDC → попадают в структурированные JSON-логи. |
 
 ### Горизонт 3 — Интеграция и инфраструктура
 

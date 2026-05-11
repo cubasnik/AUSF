@@ -6,6 +6,7 @@ import com.ausf.controlplane.eap.EapPacket;
 import com.ausf.controlplane.udm.AuthenticationVector;
 import com.ausf.controlplane.udm.UdmAuthenticationData;
 import com.ausf.controlplane.udm.UdmClient;
+import io.micrometer.observation.annotation.Observed;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -50,6 +51,7 @@ public class AuthenticationManager {
         this.suciDeconcealer = suciDeconcealer;
     }
 
+    @Observed(name = "ausf.auth.initiate", contextualName = "initiate-authentication")
     public AuthenticationResponse initiateAuthentication(String authCtxId, String supiOrSuci, String servingNetworkName, String authType) {
         String supi;
         try {
@@ -101,6 +103,7 @@ public class AuthenticationManager {
         );
     }
 
+    @Observed(name = "ausf.auth.confirm", contextualName = "verify-auth-response")
     public AuthenticationResponse verifyAuthenticationResponse(String authCtxId, String resStar, String auts, String eapPayload) {
         AuthenticationContext context = authContexts.get(authCtxId);
         if (context == null || context.isExpired()) {
