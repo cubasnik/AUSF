@@ -104,6 +104,56 @@ python automation/scripts/smoke_test_concurrent_auth.py
 
 ---
 
+## Скрипты автоматизации
+
+Все скрипты находятся в `automation/scripts/` и делятся на три категории.
+
+### Оркестраторы — запускать самостоятельно
+
+| Скрипт | Что делает |
+|--------|-----------|
+| `run_http_udm_smoke_suite.py` | Поднимает стек, прогоняет ~83 smoke-теста (happy-path, негативные, concurrent), останавливает стек. **Основной сценарий для CI и ручной проверки.** |
+| `run_full_validation.py` | Полная валидация: unit-тесты Go + Java + Python, HTTP UDM smoke, TLS smoke, SIGHUP, Flyway, Redis-failover. |
+| `run_https_tls_smoke_suite.py` | TLS smoke-суита (требует TLS-сертификатов из `generate_dev_tls_assets.py`). |
+| `run_ttl_smoke_only.py` | Только TTL-тест — быстрая точечная проверка TTL-экспирации. |
+| `run_fast_validation.ps1` | PowerShell-обёртка быстрой валидации (без Docker-сборки). |
+| `run_pre_push_regression.ps1` | Регрессионный прогон перед `git push`. |
+
+### Самостоятельные smoke-тесты — запускать при поднятом стеке
+
+Эти скрипты подключаются к `127.0.0.1:8080–8092` (или к адресам из переменных окружения). Стек должен быть запущен заранее (`docker compose up --build -d`).
+
+| Скрипт | Сценарий |
+|--------|---------|
+| `smoke_test_http_udm.py` | Happy-path 5G-AKA с Namf-нотификацией |
+| `smoke_test_http_udm_eap.py` | Happy-path EAP-AKA' |
+| `smoke_test_concurrent_auth.py` | 20 параллельных 5G-AKA аутентификаций |
+| `smoke_test_chaos_control_plane_down.py` | Circuit-breaker: убить control-plane, проверить 502/503, поднять, убедиться что breaker сбрасывается |
+| `smoke_test_namf_retry_queue.py` | Retry-очередь Namf: уведомление доставляется после перезапуска mock-AMF |
+| `smoke_test_redis_failover.py` | Redis-failover: AUSF не падает при недоступном Redis |
+| `smoke_test_sighup_cert_reload.py` | SIGHUP: горячая перезагрузка TLS-сертификатов без перезапуска |
+| `smoke_test_flyway_migration.py` | Flyway: миграция схемы БД при старте |
+| `smoke_test_http_udm_context_survives_restart.py` | Контекст аутентификации переживает перезапуск контейнера |
+| `smoke_test_http_udm_context_ttl_expired.py` | Истёкший контекст возвращает 404 CONTEXT_NOT_FOUND |
+| `smoke_test.py` | Базовый happy-path (упрощённый вариант) |
+| `smoke_test_https_tls.py` / `smoke_test_https_tls_eap.py` | Happy-path через TLS |
+
+Отдельные `smoke_test_http_udm_*.py` (негативные и edge-case сценарии) также работают при поднятом стеке, но обычно их запускают через оркестратор `run_http_udm_smoke_suite.py`.
+
+### Вспомогательные скрипты — не запускать напрямую
+
+| Скрипт | Назначение |
+|--------|-----------|
+| `smoke_test_http_udm_context_survives_restart_prepare.py` / `_verify.py` | Вызываются изнутри `_context_survives_restart.py` |
+| `smoke_test_http_udm_context_ttl_expired_prepare.py` / `_verify.py` | Вызываются изнутри `_context_ttl_expired.py` |
+| `smoke_test_http_udm_warmup.py` | Разогрев перед суитой (вызывается оркестратором) |
+| `generate_dev_tls_assets.py` | Генерация TLS-сертификатов для dev-окружения |
+| `refresh_mock_services.ps1` | Пересборка mock-сервисов |
+| `run_load_test.py` | Нагрузочный тест (отдельный сценарий, не входит в CI) |
+| `sync_github_labels.ps1` | Синхронизация меток GitHub (`-Repository owner/repo`) |
+
+---
+
 ## Текущий охват
 
 Проект является работающей основой, а не полноценным AUSF для производственного использования. В настоящее время включает:
