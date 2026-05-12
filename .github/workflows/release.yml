@@ -147,7 +147,7 @@ jobs:
 
       - name: Upload microservice SARIF
         if: always()
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: trivy-microservice.sarif
           category: trivy-microservice
@@ -164,7 +164,7 @@ jobs:
 
       - name: Upload control-plane SARIF
         if: always()
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: trivy-control-plane.sarif
           category: trivy-control-plane
