@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	maxAttempts = 3
+	maxAttempts = 1
 	baseBackoff = 200 * time.Millisecond
 )
 
@@ -58,7 +58,7 @@ func NewClient(baseURL string) *Client {
 }
 
 func NewClientWithTLS(baseURL string, tlsClientConfig transport.TLSClientConfig, bearerToken string) (*Client, error) {
-	httpClient, err := transport.NewHTTPClient(5*time.Second, tlsClientConfig)
+	httpClient, err := transport.NewHTTPClient(2*time.Second, tlsClientConfig)
 	if err != nil {
 		return nil, err
 	}

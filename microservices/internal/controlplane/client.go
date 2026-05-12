@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	maxAttempts = 3
+	maxAttempts = 1
 	baseBackoff = 200 * time.Millisecond
 
 	defaultBreakerTimeout             = 10 * time.Second
@@ -111,7 +111,7 @@ func NewClientWithTLSAndBreaker(baseURL string, tlsClientConfig TLSClientConfig,
 		timeout = defaultBreakerTimeout
 	}
 
-	httpClient, err := transport.NewHTTPClient(5*time.Second, transport.TLSClientConfig(tlsClientConfig))
+	httpClient, err := transport.NewHTTPClient(3*time.Second, transport.TLSClientConfig(tlsClientConfig))
 	if err != nil {
 		return nil, err
 	}

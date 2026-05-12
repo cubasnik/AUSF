@@ -222,21 +222,6 @@ func (service *AuthService) Confirm(ctx context.Context, authCtxID string, resSt
 			if saveErr := service.store.Save(context); saveErr != nil {
 				return ConfirmationResult{}, contextStoreError("auth context update failed", saveErr)
 			}
-			if service.namfClient != nil {
-				notification := namf.UEAuthenticationStatusNotification{
-					AuthCtxID:          authCtxID,
-					SUPI:               context.SUPI,
-					AuthType:           context.AuthType,
-					ServingNetworkName: context.ServingNetworkName,
-					AuthResult:         "FAILURE",
-				}
-				if notifyErr := service.namfClient.NotifyUEAuthenticationStatus(notification, context.NotificationURI); notifyErr != nil {
-					logServiceJSON("WARN", "namf failure notification failed", map[string]any{
-						"auth_ctx_id": authCtxID,
-						"error":       notifyErr.Error(),
-					})
-				}
-			}
 		}
 		if service.recorder != nil {
 			service.recorder.RecordAuthFailed(mappedErr.Cause)
@@ -338,7 +323,8 @@ func (service *AuthService) Delete(authCtxID string) error {
 	service.mu.Lock()
 	defer service.mu.Unlock()
 
-	if _, err := service.lookupContextLocked(authCtxID); err != nil {
+	context, err := service.lookupContextLocked(authCtxID)
+	if err != nil {
 		return err
 	}
 
@@ -348,6 +334,22 @@ func (service *AuthService) Delete(authCtxID string) error {
 	}
 	if !deleted {
 		return contextNotFoundError()
+	}
+
+	if context.Status == "FAILED" && service.namfClient != nil && context.NotificationURI != "" {
+		notification := namf.UEAuthenticationStatusNotification{
+			AuthCtxID:          authCtxID,
+			SUPI:               context.SUPI,
+			AuthType:           context.AuthType,
+			ServingNetworkName: context.ServingNetworkName,
+			AuthResult:         "FAILURE",
+		}
+		if notifyErr := service.namfClient.NotifyUEAuthenticationStatus(notification, context.NotificationURI); notifyErr != nil {
+			logServiceJSON("WARN", "namf failure notification failed", map[string]any{
+				"auth_ctx_id": authCtxID,
+				"error":       notifyErr.Error(),
+			})
+		}
 	}
 	return nil
 }

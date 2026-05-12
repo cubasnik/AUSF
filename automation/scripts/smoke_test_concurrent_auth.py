@@ -39,11 +39,11 @@ from smoke_runtime import (
 
 SERVING_NETWORK = "5G:mnc001.mcc001.3gppnetwork.org"
 THREAD_COUNT = 20
-# imsi-250010000000001 through imsi-250010000000020 — all registered in
-# control-plane/data/subscribers.json with authMethod=5G_AKA (001 is the
-# original; 002 is EAP_AKA_PRIME but 5G_AKA is requested explicitly here;
-# 003–020 added for this test).
-SUPIS = [f"imsi-2500100000000{i:02d}" for i in range(1, THREAD_COUNT + 1)]
+# imsi-250010000000001, imsi-250010000000003 through imsi-250010000000021 —
+# all registered in control-plane/data/subscribers.json with authMethod=5G_AKA.
+# imsi-250010000000002 is EAP_AKA_PRIME and is intentionally excluded; it is
+# used by the EAP_AKA_PRIME smoke tests.
+SUPIS = [f"imsi-2500100000000{i:02d}" for i in range(1, 22) if i != 2]
 
 
 @dataclass

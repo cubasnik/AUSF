@@ -21,7 +21,7 @@ routes:
     properties:
       supiOrSuci:         {type: string}
       servingNetworkName: {type: string}
-      authType:           {type: string, enum: [5G_AKA, EAP_AKA_PRIME]}
+      authType:           {type: string}
       notificationUri:    {type: string}
 
   # POST …/{authCtxId}/5g-aka-confirmation — confirm 5G-AKA

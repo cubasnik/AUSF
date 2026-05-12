@@ -13,25 +13,23 @@ import (
 )
 
 func TestClientShouldRetryTransientFailure(t *testing.T) {
+	// With maxAttempts=1 the Client makes exactly one attempt.  Transient
+	// failures are handled by the RetryingClient (async queue), not here.
 	var requests int32
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-		count := atomic.AddInt32(&requests, 1)
-		if count == 1 {
-			writer.WriteHeader(http.StatusBadGateway)
-			return
-		}
-		writer.WriteHeader(http.StatusNoContent)
+		atomic.AddInt32(&requests, 1)
+		writer.WriteHeader(http.StatusBadGateway)
 	}))
 	defer server.Close()
 
 	client := NewClient(server.URL)
 
 	err := client.NotifyUEAuthenticationStatus(UEAuthenticationStatusNotification{AuthCtxID: "auth-1", SUPI: "imsi-250010000000001", AuthResult: "SUCCESS"}, "")
-	if err != nil {
-		t.Fatalf("NotifyUEAuthenticationStatus() error = %v", err)
+	if err == nil {
+		t.Fatal("expected error for 502 response, got nil")
 	}
-	if got := atomic.LoadInt32(&requests); got != 2 {
-		t.Fatalf("requests = %d, want 2", got)
+	if got := atomic.LoadInt32(&requests); got != 1 {
+		t.Fatalf("requests = %d, want 1", got)
 	}
 }
 

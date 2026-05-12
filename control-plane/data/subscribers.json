@@ -178,5 +178,14 @@
     "servingNetworkName": "5G:mnc001.mcc001.3gppnetwork.org",
     "sequenceNumber": 16,
     "routingIndicator": "0020"
+  },
+  {
+    "supi": "imsi-250010000000021",
+    "authMethod": "5G_AKA",
+    "permanentKey": "465b5ce8b199b49faa5f0a2ee238a6bc",
+    "opc": "e8ed289deba952e4283b54e88e6183ca",
+    "servingNetworkName": "5G:mnc001.mcc001.3gppnetwork.org",
+    "sequenceNumber": 16,
+    "routingIndicator": "0021"
   }
 ]

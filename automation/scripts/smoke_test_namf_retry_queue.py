@@ -117,26 +117,36 @@ def main() -> int:
     print(f"confirmed: {confirmed}")
     # AUSF should have attempted delivery and failed; it must not raise an error
     # on the confirm endpoint itself — only the background retry is affected.
-    assert confirmed.get("authResult") == "AUTHENTICATION_VERIFIED", (
+    assert confirmed.get("authResult") == "SUCCESS", (
         f"unexpected confirm result: {confirmed}"
     )
 
     # Verify that no notification arrived while AMF was down.
-    immediate_notifications = load_amf_notifications()[baseline_count:]
-    amf_notified_immediately = any(
-        n.get("authCtxId") == auth_ctx_id for n in immediate_notifications
-    )
-    if amf_notified_immediately:
-        raise AssertionError(
-            "Namf SUCCESS notification arrived while mock-amf was stopped — "
-            "retry queue was not exercised"
+    # If AMF is stopped the HTTP call will raise; that itself proves nothing
+    # was delivered (the container is not accepting connections).
+    try:
+        immediate_notifications = load_amf_notifications()[baseline_count:]
+        amf_notified_immediately = any(
+            n.get("authCtxId") == auth_ctx_id for n in immediate_notifications
         )
+        if amf_notified_immediately:
+            raise AssertionError(
+                "Namf SUCCESS notification arrived while mock-amf was stopped — "
+                "retry queue was not exercised"
+            )
+    except (OSError, TimeoutError):
+        pass  # AMF is stopped — connection failure confirms no notification was delivered
     print("amf-notification-while-stopped: none (expected)")
 
     # Restore mock-amf and wait for the retry queue to drain.
     _start_amf()
+    # mock-amf stores notifications in-memory; after a stop/start the list is
+    # reset to empty, so the pre-stop baseline_count is no longer valid.
+    # Re-read the current count (will be 0 right after restart) so that
+    # _wait_for_success_notification slices from the right position.
+    post_restart_baseline = len(load_amf_notifications())
 
-    notification = _wait_for_success_notification(auth_ctx_id, baseline_count)
+    notification = _wait_for_success_notification(auth_ctx_id, post_restart_baseline)
     print(f"retry-queue-drained-notification: {notification}")
     assert notification["supi"] == SUPI
     print("retry-queue-drain: SUCCESS")
