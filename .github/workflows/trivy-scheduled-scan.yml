@@ -48,7 +48,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Scan ${{ matrix.image.name }} for CVEs
-        uses: aquasecurity/trivy-action@0.31.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ghcr.io/${{ matrix.image.ref }}
           format: sarif
@@ -67,7 +67,7 @@ jobs:
           category: ${{ matrix.image.category }}
 
       - name: Fail if CRITICAL CVEs found (unfixed)
-        uses: aquasecurity/trivy-action@0.31.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ghcr.io/${{ matrix.image.ref }}
           format: table
