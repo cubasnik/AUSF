@@ -75,7 +75,16 @@ def read_container_health(container_name: str) -> str:
     return result.stdout.strip()
 
 
-def wait_for_container_health(container_name: str, timeout_seconds: int = 60) -> None:
+def dump_container_logs(container_name: str) -> None:
+    print(f"==> logs for {container_name}:", flush=True)
+    subprocess.run(
+        ["docker", "logs", "--tail", "80", container_name],
+        cwd=ROOT,
+        check=False,
+    )
+
+
+def wait_for_container_health(container_name: str, timeout_seconds: int = 120) -> None:
     deadline = time.time() + timeout_seconds
     last_error: Exception | None = None
     while time.time() < deadline:
@@ -84,11 +93,14 @@ def wait_for_container_health(container_name: str, timeout_seconds: int = 60) ->
             if status == "healthy":
                 print(f"==> healthy {container_name}", flush=True)
                 return
-            if status in {"unhealthy", "exited", "dead"}:
+            if status in {"exited", "dead"}:
+                dump_container_logs(container_name)
                 raise RuntimeError(f"container {container_name} entered status {status}")
-        except (subprocess.CalledProcessError, OSError, RuntimeError) as error:
+            # "unhealthy" may be transient while start_period is active — keep waiting
+        except (subprocess.CalledProcessError, OSError) as error:
             last_error = error
-        time.sleep(1)
+        time.sleep(2)
+    dump_container_logs(container_name)
     raise RuntimeError(f"timed out waiting for container {container_name}: {last_error}")
 
 

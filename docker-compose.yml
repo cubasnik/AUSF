@@ -126,7 +126,7 @@ services:
         condition: service_started
     healthcheck:
       test: ["CMD-SHELL", "bash -lc \"exec 3<>/dev/tcp/127.0.0.1/8081; printf 'GET /healthz HTTP/1.1\\r\\nHost: 127.0.0.1\\r\\nConnection: close\\r\\n\\r\\n' >&3; grep -q '200' <&3\""]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-      start_period: 5s
+      interval: 10s
+      timeout: 10s
+      retries: 12
+      start_period: 60s

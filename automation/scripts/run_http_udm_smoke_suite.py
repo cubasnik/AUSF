@@ -122,7 +122,7 @@ def main() -> int:
     args = parse_args()
     try:
         compose_up(skip_build=args.skip_build)
-        wait_for_containers(HEALTH_CONTAINERS)
+        wait_for_containers(HEALTH_CONTAINERS, timeout_seconds=180)
         for script in SMOKE_SCRIPTS:
             run_compose_smoke_script(script, env=DEFAULT_SMOKE_RUNNER_ENV)
             for service_name in RESET_SERVICES_AFTER_SCRIPT.get(script, []):
