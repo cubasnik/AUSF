@@ -86,8 +86,11 @@ def dump_container_logs(container_name: str) -> None:
 
 def wait_for_container_health(container_name: str, timeout_seconds: int = 120) -> None:
     deadline = time.time() + timeout_seconds
+    unhealthy_since: float | None = None
+    last_log_time: float = 0.0
     last_error: Exception | None = None
     while time.time() < deadline:
+        now = time.time()
         try:
             status = read_container_health(container_name)
             if status == "healthy":
@@ -96,7 +99,17 @@ def wait_for_container_health(container_name: str, timeout_seconds: int = 120) -
             if status in {"exited", "dead"}:
                 dump_container_logs(container_name)
                 raise RuntimeError(f"container {container_name} entered status {status}")
-            # "unhealthy" may be transient while start_period is active — keep waiting
+            if status == "unhealthy":
+                if unhealthy_since is None:
+                    unhealthy_since = now
+                    print(f"==> {container_name} unhealthy (will fail in 120s if not recovered)", flush=True)
+                elif now - unhealthy_since > 120:
+                    dump_container_logs(container_name)
+                    raise RuntimeError(f"container {container_name} stuck unhealthy for >120s")
+            # status is "starting" or something transient — log periodically
+            if now - last_log_time >= 30:
+                print(f"==> waiting for {container_name}: status={status}", flush=True)
+                last_log_time = now
         except (subprocess.CalledProcessError, OSError) as error:
             last_error = error
         time.sleep(2)
