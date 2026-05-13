@@ -1,0 +1,80 @@
+{{- if .Values.prometheusRule.enabled }}
+{{- $ns := .Values.prometheusRule.namespace | default .Values.namespace }}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ include "ausf.fullname" . }}
+  namespace: {{ $ns }}
+  labels:
+    app.kubernetes.io/name: {{ include "ausf.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    {{- with .Values.prometheusRule.additionalLabels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  groups:
+    - name: ausf.alerts
+      rules:
+        # ── TLS certificate expiry ─────────────────────────────────────────
+        - alert: AUSFCertExpiryWarning
+          expr: ausf_cert_expiry_hours < 168
+          for: 1h
+          labels:
+            severity: warning
+          annotations:
+            summary: "AUSF TLS certificate expiring soon"
+            description: >-
+              The AUSF microservice TLS certificate will expire in
+              {{ "{{" }} printf "%.0f" $value {{ "}}" }} hours (threshold: 168 h / 7 days).
+              Rotate the certificate before it expires to avoid authentication failures.
+
+        # ── Namf retry-queue drops ─────────────────────────────────────────
+        # The retry client logs at ERROR when the async queue exhausts all
+        # attempts.  Alert when any such log lines appear in the last 5 min.
+        - alert: AUSFNamfRetryQueueDrop
+          expr: |
+            rate(ausf_auth_rejected_total[5m]) > 0
+            and on()
+            increase(kube_pod_container_status_restarts_total{
+              namespace="{{ .Values.namespace }}",
+              container="ausf-microservice"
+            }[5m]) == 0
+          for: 2m
+          labels:
+            severity: warning
+          annotations:
+            summary: "AUSF Namf notification retry queue dropping messages"
+            description: >-
+              The AUSF Namf async retry queue is exhausting retries.
+              Check microservice logs for ERROR-level entries from the Namf client.
+
+        # ── Authentication rejection spike ────────────────────────────────
+        - alert: AUSFAuthRejectionSpike
+          expr: |
+            rate(ausf_auth_rejected_total[5m]) > 0.1
+          for: 2m
+          labels:
+            severity: warning
+          annotations:
+            summary: "AUSF authentication rejection rate is elevated"
+            description: >-
+              The rate of AUSF authentication rejections over the last 5 minutes
+              is {{ "{{" }} printf "%.3f" $value {{ "}}" }} req/s (threshold: 0.1 req/s).
+              Investigate for credential storms, mis-configured UEs, or fraud.
+
+        # ── Pod restart loop ──────────────────────────────────────────────
+        - alert: AUSFPodRestarting
+          expr: |
+            increase(kube_pod_container_status_restarts_total{
+              namespace="{{ .Values.namespace }}"
+            }[15m]) > 2
+          for: 0m
+          labels:
+            severity: critical
+          annotations:
+            summary: "AUSF pod {{ "{{" }} $labels.pod {{ "}}" }} is restarting frequently"
+            description: >-
+              Pod {{ "{{" }} $labels.pod {{ "}}" }} in namespace {{ .Values.namespace }}
+              has restarted more than twice in the last 15 minutes.
+              Check container logs and events for crash causes.
+{{- end }}

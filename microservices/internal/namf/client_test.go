@@ -1,0 +1,137 @@
+package namf
+
+import (
+	"encoding/json"
+	"encoding/pem"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"sync/atomic"
+	"testing"
+
+	"github.com/alexey/ausf/microservices/internal/transport"
+)
+
+func TestClientShouldRetryTransientFailure(t *testing.T) {
+	// With maxAttempts=1 the Client makes exactly one attempt.  Transient
+	// failures are handled by the RetryingClient (async queue), not here.
+	var requests int32
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		atomic.AddInt32(&requests, 1)
+		writer.WriteHeader(http.StatusBadGateway)
+	}))
+	defer server.Close()
+
+	client := NewClient(server.URL)
+
+	err := client.NotifyUEAuthenticationStatus(UEAuthenticationStatusNotification{AuthCtxID: "auth-1", SUPI: "imsi-250010000000001", AuthResult: "SUCCESS"}, "")
+	if err == nil {
+		t.Fatal("expected error for 502 response, got nil")
+	}
+	if got := atomic.LoadInt32(&requests); got != 1 {
+		t.Fatalf("requests = %d, want 1", got)
+	}
+}
+
+func TestClientShouldSkipWhenBaseURLIsBlank(t *testing.T) {
+	client := NewClient("")
+	if err := client.NotifyUEAuthenticationStatus(UEAuthenticationStatusNotification{AuthCtxID: "auth-1"}, ""); err != nil {
+		t.Fatalf("NotifyUEAuthenticationStatus() error = %v", err)
+	}
+}
+
+func TestClientShouldSendExpectedPayload(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if request.URL.Path != "/namf-comm/v1/ue-authentications/auth-9/status-notify" {
+			t.Fatalf("path = %s, want /namf-comm/v1/ue-authentications/auth-9/status-notify", request.URL.Path)
+		}
+		var payload UEAuthenticationStatusNotification
+		if err := json.NewDecoder(request.Body).Decode(&payload); err != nil {
+			t.Fatalf("decode payload: %v", err)
+		}
+		if payload.SUPI != "imsi-250010000000009" {
+			t.Fatalf("payload supi = %s, want imsi-250010000000009", payload.SUPI)
+		}
+		writer.WriteHeader(http.StatusNoContent)
+	}))
+	defer server.Close()
+
+	client := NewClient(server.URL)
+	err := client.NotifyUEAuthenticationStatus(UEAuthenticationStatusNotification{
+		AuthCtxID:  "auth-9",
+		SUPI:       "imsi-250010000000009",
+		AuthResult: "SUCCESS",
+	}, "")
+	if err != nil {
+		t.Fatalf("NotifyUEAuthenticationStatus() error = %v", err)
+	}
+}
+
+func TestClientShouldUseNotificationUriTemplateWhenProvided(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if request.URL.Path != "/custom/auth-7/callback" {
+			t.Fatalf("path = %s, want /custom/auth-7/callback", request.URL.Path)
+		}
+		writer.WriteHeader(http.StatusNoContent)
+	}))
+	defer server.Close()
+
+	client := NewClient("")
+	err := client.NotifyUEAuthenticationStatus(UEAuthenticationStatusNotification{
+		AuthCtxID:  "auth-7",
+		SUPI:       "imsi-250010000000007",
+		AuthResult: "SUCCESS",
+	}, server.URL+"/custom/{authCtxId}/callback")
+	if err != nil {
+		t.Fatalf("NotifyUEAuthenticationStatus() error = %v", err)
+	}
+}
+
+func TestClientShouldSendBearerTokenWhenConfigured(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if got := request.Header.Get("Authorization"); got != "Bearer namf-token" {
+			t.Fatalf("Authorization = %s, want Bearer namf-token", got)
+		}
+		writer.WriteHeader(http.StatusNoContent)
+	}))
+	defer server.Close()
+
+	client, err := NewClientWithTLS(server.URL, transport.TLSClientConfig{}, "namf-token")
+	if err != nil {
+		t.Fatalf("NewClientWithTLS() error = %v", err)
+	}
+
+	err = client.NotifyUEAuthenticationStatus(UEAuthenticationStatusNotification{AuthCtxID: "auth-1", SUPI: "imsi-250010000000001", AuthResult: "SUCCESS"}, "")
+	if err != nil {
+		t.Fatalf("NotifyUEAuthenticationStatus() error = %v", err)
+	}
+}
+
+func TestClientShouldTrustConfiguredTLSCACertificate(t *testing.T) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		writer.WriteHeader(http.StatusNoContent)
+	}))
+	defer server.Close()
+
+	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: server.Certificate().Raw})
+	caFile, err := os.CreateTemp(t.TempDir(), "namf-ca-*.pem")
+	if err != nil {
+		t.Fatalf("CreateTemp() error = %v", err)
+	}
+	if _, err := caFile.Write(certPEM); err != nil {
+		t.Fatalf("Write() error = %v", err)
+	}
+	if err := caFile.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+
+	client, err := NewClientWithTLS(server.URL, transport.TLSClientConfig{CACertFile: caFile.Name()}, "")
+	if err != nil {
+		t.Fatalf("NewClientWithTLS() error = %v", err)
+	}
+
+	err = client.NotifyUEAuthenticationStatus(UEAuthenticationStatusNotification{AuthCtxID: "auth-1", SUPI: "imsi-250010000000001", AuthResult: "SUCCESS"}, "")
+	if err != nil {
+		t.Fatalf("NotifyUEAuthenticationStatus() error = %v", err)
+	}
+}

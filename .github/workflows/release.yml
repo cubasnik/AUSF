@@ -1,0 +1,266 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+env:
+  REGISTRY: ghcr.io
+  MICROSERVICE_IMAGE: ghcr.io/${{ github.repository_owner }}/ausf-microservice
+  CONTROL_PLANE_IMAGE: ghcr.io/${{ github.repository_owner }}/ausf-control-plane
+  HELM_CHART_PATH: deploy/helm/ausf
+
+jobs:
+  # ─────────────────────────────────────────────────────────────
+  # 1. Build & push Go microservice image
+  # ─────────────────────────────────────────────────────────────
+  build-microservice:
+    name: Build Go microservice image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    outputs:
+      digest: ${{ steps.push.outputs.digest }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.MICROSERVICE_IMAGE }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha
+
+      - name: Build and push
+        id: push
+        uses: docker/build-push-action@v6
+        with:
+          context: microservices
+          file: microservices/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ─────────────────────────────────────────────────────────────
+  # 2. Build & push Java control-plane image
+  # ─────────────────────────────────────────────────────────────
+  build-control-plane:
+    name: Build Java control-plane image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    outputs:
+      digest: ${{ steps.push.outputs.digest }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.CONTROL_PLANE_IMAGE }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha
+
+      - name: Build and push (runtime-from-source target)
+        id: push
+        uses: docker/build-push-action@v6
+        with:
+          context: control-plane
+          file: control-plane/Dockerfile
+          target: runtime-from-source
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ─────────────────────────────────────────────────────────────
+  # 3. Trivy CVE scan on both newly-built images
+  #    (CRITICAL → fail; HIGH → warn)
+  # ─────────────────────────────────────────────────────────────
+  trivy-scan-release:
+    name: Trivy CVE scan (release images)
+    runs-on: ubuntu-latest
+    needs: [build-microservice, build-control-plane]
+    permissions:
+      contents: read
+      packages: read
+      security-events: write   # upload SARIF to GitHub Security tab
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Scan microservice image
+        uses: aquasecurity/trivy-action@0.31.0
+        with:
+          image-ref: ${{ env.MICROSERVICE_IMAGE }}:${{ github.ref_name }}
+          format: sarif
+          output: trivy-microservice.sarif
+          exit-code: "1"
+          severity: CRITICAL
+          ignore-unfixed: true
+
+      - name: Upload microservice SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-microservice.sarif
+          category: trivy-microservice
+
+      - name: Scan control-plane image
+        uses: aquasecurity/trivy-action@0.31.0
+        with:
+          image-ref: ${{ env.CONTROL_PLANE_IMAGE }}:${{ github.ref_name }}
+          format: sarif
+          output: trivy-control-plane.sarif
+          exit-code: "1"
+          severity: CRITICAL
+          ignore-unfixed: true
+
+      - name: Upload control-plane SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-control-plane.sarif
+          category: trivy-control-plane
+
+  # ─────────────────────────────────────────────────────────────
+  # 4. SBOM generation — CycloneDX JSON via Syft, attached to release
+  # ─────────────────────────────────────────────────────────────
+  sbom:
+    name: Generate SBOM (CycloneDX JSON)
+    runs-on: ubuntu-latest
+    needs: [build-microservice, build-control-plane]
+    permissions:
+      contents: write   # upload files to GitHub release
+      packages: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate SBOM — microservice
+        uses: anchore/syft-action@v1
+        with:
+          image: ${{ env.MICROSERVICE_IMAGE }}:${{ github.ref_name }}
+          output-file: sbom-microservice.cdx.json
+          format: cyclonedx-json
+
+      - name: Generate SBOM — control-plane
+        uses: anchore/syft-action@v1
+        with:
+          image: ${{ env.CONTROL_PLANE_IMAGE }}:${{ github.ref_name }}
+          output-file: sbom-control-plane.cdx.json
+          format: cyclonedx-json
+
+      - name: Attach SBOMs to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            sbom-microservice.cdx.json
+            sbom-control-plane.cdx.json
+
+  # ─────────────────────────────────────────────────────────────
+  # 5. Helm lint + template smoke + package + publish to gh-pages
+  # ─────────────────────────────────────────────────────────────
+  helm-publish:
+    name: Helm lint, package & publish
+    runs-on: ubuntu-latest
+    needs: [trivy-scan-release, sbom]
+    permissions:
+      contents: write   # push to gh-pages
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # needed for gh-pages history
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: "v3.17.3"
+
+      - name: Add Bitnami repo (for dependency update)
+        run: helm repo add bitnami https://charts.bitnami.com/bitnami
+
+      - name: Update chart dependencies
+        run: helm dependency update ${{ env.HELM_CHART_PATH }}
+
+      - name: Lint chart
+        run: helm lint ${{ env.HELM_CHART_PATH }} --strict
+
+      - name: Template smoke (default values)
+        run: |
+          helm template ausf-smoke ${{ env.HELM_CHART_PATH }} \
+            --set microservice.image.tag=${{ github.ref_name }} \
+            --set controlPlane.image.tag=${{ github.ref_name }} \
+            > /dev/null
+
+      - name: Package chart
+        run: |
+          mkdir -p dist
+          helm package ${{ env.HELM_CHART_PATH }} \
+            --app-version ${{ github.ref_name }} \
+            --destination dist
+
+      - name: Publish chart to GitHub Pages
+        uses: helm/chart-releaser-action@v1.7.0
+        env:
+          CR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          charts_dir: deploy/helm
+          skip_existing: true
+          pages_branch: gh-pages

@@ -1,0 +1,25 @@
+# Compose override for smoke_test_redis_failover.py.
+# Usage: docker compose -f docker-compose.yml -f docker-compose.redis.yml <command>
+#
+# Adds a Redis service and configures ausf-go to use the Redis-backed
+# Namf notification retry queue (AUSF_NAMF_QUEUE_BACKEND=redis).
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: ausf-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 2s
+
+  ausf-go:
+    environment:
+      AUSF_NAMF_QUEUE_BACKEND: redis
+      AUSF_NAMF_REDIS_URL: redis://redis:6379/0
+    depends_on:
+      redis:
+        condition: service_healthy

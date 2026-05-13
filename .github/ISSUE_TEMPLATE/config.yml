@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: AUSF contribution templates
+    url: https://github.com/cubasnik/AUSF#contribution-templates
+    about: Review the PR, feature, bug, and release templates before opening a custom issue.
+  - name: AUSF release gate checklist
+    url: https://github.com/cubasnik/AUSF/blob/main/.github/RELEASE_GATE_CHECKLIST.md
+    about: Use the release gate checklist before opening or approving a release candidate.

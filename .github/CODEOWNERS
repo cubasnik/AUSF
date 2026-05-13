@@ -1,0 +1,39 @@
+# CODEOWNERS
+
+* @cubasnik
+
+/.github/ @cubasnik
+/.github/ISSUE_TEMPLATE/ @cubasnik
+/.github/workflows/ @cubasnik
+
+/automation/ @cubasnik
+/automation/scripts/ @cubasnik
+/automation/src/ @cubasnik
+
+/control-plane/ @cubasnik
+/control-plane/src/main/ @cubasnik
+/control-plane/src/test/ @cubasnik
+/control-plane/pom.xml @cubasnik
+
+/microservices/ @cubasnik
+/microservices/cmd/ @cubasnik
+/microservices/internal/api/ @cubasnik
+/microservices/internal/config/ @cubasnik
+/microservices/internal/controlplane/ @cubasnik
+/microservices/internal/namf/ @cubasnik
+/microservices/internal/service/ @cubasnik
+/microservices/internal/transport/ @cubasnik
+/microservices/go.mod @cubasnik
+
+/deploy/ @cubasnik
+/mock-network-functions/ @cubasnik
+
+/networking/ @cubasnik
+/networking/include/ @cubasnik
+/networking/src/ @cubasnik
+/networking/CMakeLists.txt @cubasnik
+
+/README.md @cubasnik
+/Makefile @cubasnik
+/make.ps1 @cubasnik
+/docker-compose*.yml @cubasnik

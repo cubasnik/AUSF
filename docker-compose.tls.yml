@@ -1,0 +1,22 @@
+services:
+  ausf-go:
+    environment:
+      AUSF_TLS_CERT_FILE: /tls/ausf-go.crt
+      AUSF_TLS_KEY_FILE: /tls/ausf-go.key
+      CONTROL_PLANE_BASE_URL: https://ausf-control-plane:8081
+      CONTROL_PLANE_TLS_CA_CERT_FILE: /tls/dev-root-ca.crt
+    volumes:
+      - ./automation/.tls-dev:/tls:ro
+    healthcheck:
+      disable: true
+
+  ausf-control-plane:
+    environment:
+      AUSF_SERVER_TLS_ENABLED: "true"
+      AUSF_SERVER_TLS_KEY_STORE: /tls/ausf-control-plane.p12
+      AUSF_SERVER_TLS_KEY_STORE_PASSWORD: changeit
+      AUSF_SERVER_TLS_KEY_STORE_TYPE: PKCS12
+    volumes:
+      - ./automation/.tls-dev:/tls:ro
+    healthcheck:
+      disable: true

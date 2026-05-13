@@ -1,0 +1,159 @@
+{{- if .Values.mocks.enabled }}
+{{- $fullname := include "ausf.fullname" . }}
+{{- $ns := .Values.namespace }}
+# ── Mock UDM ────────────────────────────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $fullname }}-mock-udm
+  namespace: {{ $ns }}
+  labels:
+    {{- include "ausf.labels" . | nindent 4 }}
+    {{- include "ausf.mock.udm.selectorLabels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "ausf.mock.udm.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "ausf.labels" . | nindent 8 }}
+        {{- include "ausf.mock.udm.selectorLabels" . | nindent 8 }}
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+      containers:
+        - name: mock-udm
+          image: "{{ .Values.mocks.udm.image.repository }}:{{ .Values.mocks.udm.image.tag }}"
+          imagePullPolicy: {{ .Values.mocks.udm.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.mocks.udm.service.port }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $fullname }}-mock-udm
+  namespace: {{ $ns }}
+  labels:
+    {{- include "ausf.labels" . | nindent 4 }}
+    {{- include "ausf.mock.udm.selectorLabels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+    - port: {{ .Values.mocks.udm.service.port }}
+      targetPort: http
+      name: http
+  selector:
+    {{- include "ausf.mock.udm.selectorLabels" . | nindent 4 }}
+---
+# ── Mock NRF ────────────────────────────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $fullname }}-mock-nrf
+  namespace: {{ $ns }}
+  labels:
+    {{- include "ausf.labels" . | nindent 4 }}
+    {{- include "ausf.mock.nrf.selectorLabels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "ausf.mock.nrf.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "ausf.labels" . | nindent 8 }}
+        {{- include "ausf.mock.nrf.selectorLabels" . | nindent 8 }}
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+      containers:
+        - name: mock-nrf
+          image: "{{ .Values.mocks.nrf.image.repository }}:{{ .Values.mocks.nrf.image.tag }}"
+          imagePullPolicy: {{ .Values.mocks.nrf.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.mocks.nrf.service.port }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $fullname }}-mock-nrf
+  namespace: {{ $ns }}
+  labels:
+    {{- include "ausf.labels" . | nindent 4 }}
+    {{- include "ausf.mock.nrf.selectorLabels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+    - port: {{ .Values.mocks.nrf.service.port }}
+      targetPort: http
+      name: http
+  selector:
+    {{- include "ausf.mock.nrf.selectorLabels" . | nindent 4 }}
+---
+# ── Mock AMF ────────────────────────────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $fullname }}-mock-amf
+  namespace: {{ $ns }}
+  labels:
+    {{- include "ausf.labels" . | nindent 4 }}
+    {{- include "ausf.mock.amf.selectorLabels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "ausf.mock.amf.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "ausf.labels" . | nindent 8 }}
+        {{- include "ausf.mock.amf.selectorLabels" . | nindent 8 }}
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+      containers:
+        - name: mock-amf
+          image: "{{ .Values.mocks.amf.image.repository }}:{{ .Values.mocks.amf.image.tag }}"
+          imagePullPolicy: {{ .Values.mocks.amf.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.mocks.amf.service.port }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $fullname }}-mock-amf
+  namespace: {{ $ns }}
+  labels:
+    {{- include "ausf.labels" . | nindent 4 }}
+    {{- include "ausf.mock.amf.selectorLabels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+    - port: {{ .Values.mocks.amf.service.port }}
+      targetPort: http
+      name: http
+  selector:
+    {{- include "ausf.mock.amf.selectorLabels" . | nindent 4 }}
+{{- end }}

@@ -1,0 +1,65 @@
+{{- $fullname := include "ausf.fullname" . }}
+{{- if .Values.microservice.hpa.enabled }}
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ $fullname }}-microservice
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "ausf.labels" . | nindent 4 }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ $fullname }}-microservice
+  minReplicas: {{ .Values.microservice.hpa.minReplicas }}
+  maxReplicas: {{ .Values.microservice.hpa.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.microservice.hpa.targetCPUUtilizationPercentage }}
+    {{- if .Values.microservice.hpa.targetMemoryUtilizationPercentage }}
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.microservice.hpa.targetMemoryUtilizationPercentage }}
+    {{- end }}
+{{- end }}
+{{- if .Values.controlPlane.hpa.enabled }}
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ $fullname }}-control-plane
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "ausf.labels" . | nindent 4 }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ $fullname }}-control-plane
+  minReplicas: {{ .Values.controlPlane.hpa.minReplicas }}
+  maxReplicas: {{ .Values.controlPlane.hpa.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.controlPlane.hpa.targetCPUUtilizationPercentage }}
+    {{- if .Values.controlPlane.hpa.targetMemoryUtilizationPercentage }}
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.controlPlane.hpa.targetMemoryUtilizationPercentage }}
+    {{- end }}
+{{- end }}

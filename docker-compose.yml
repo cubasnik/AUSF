@@ -1,0 +1,132 @@
+services:
+  postgres:
+    image: postgres:15
+    container_name: ausf-postgres
+    environment:
+      POSTGRES_DB: ausf
+      POSTGRES_USER: ausf
+      POSTGRES_PASSWORD: ausf
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ausf -d ausf"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+
+  mock-udm:
+    image: python:3.12-slim
+    container_name: mock-udm
+    working_dir: /app
+    command: ["python", "mock-network-functions/udm_server.py"]
+    environment:
+      MOCK_UDM_SUBSCRIBERS_FILE: /app/control-plane/data/subscribers.json
+    volumes:
+      - ./:/app:ro
+    ports:
+      - "8090:8090"
+    healthcheck:
+      test: ["CMD", "python", "-c", "from urllib.request import urlopen; urlopen('http://127.0.0.1:8090/healthz', timeout=5).read()"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 2s
+
+  mock-nrf:
+    image: python:3.12-slim
+    container_name: mock-nrf
+    working_dir: /app
+    command: ["python", "mock-network-functions/nrf_server.py"]
+    environment:
+      MOCK_NRF_UDM_BASE_URL: http://mock-udm:8090
+    volumes:
+      - ./:/app:ro
+    depends_on:
+      - mock-udm
+    ports:
+      - "8091:8091"
+    healthcheck:
+      test: ["CMD", "python", "-c", "from urllib.request import urlopen; urlopen('http://127.0.0.1:8091/healthz', timeout=5).read()"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 2s
+
+  mock-amf:
+    image: python:3.12-slim
+    container_name: mock-amf
+    working_dir: /app
+    command: ["python", "mock-network-functions/amf_server.py"]
+    volumes:
+      - ./:/app:ro
+    ports:
+      - "8092:8092"
+    healthcheck:
+      test: ["CMD", "python", "-c", "from urllib.request import urlopen; urlopen('http://127.0.0.1:8092/healthz', timeout=5).read()"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 2s
+
+  ausf-go:
+    image: ausf-ausf-go:latest
+    build:
+      context: ./microservices
+      dockerfile: Dockerfile
+    container_name: ausf-go
+    environment:
+      AUSF_HOST: 0.0.0.0
+      AUSF_PORT: 8080
+      AUSF_SBI_BEARER_TOKEN: ${AUSF_SBI_BEARER_TOKEN:-}
+      CONTROL_PLANE_BASE_URL: http://ausf-control-plane:8081
+      CONTROL_PLANE_BEARER_TOKEN: ${CONTROL_PLANE_BEARER_TOKEN:-}
+      AUSF_NAMF_BASE_URL: http://mock-amf:8092
+      AUSF_NAMF_BEARER_TOKEN: ${AUSF_NAMF_BEARER_TOKEN:-}
+      AUSF_AUTH_CONTEXT_STORE_FILE: /tmp/ausf-auth-contexts.json
+      AUSF_AUTH_CONTEXT_TTL_SECONDS: 900
+    ports:
+      - "8080:8080"
+    depends_on:
+      - mock-udm
+      - mock-nrf
+      - mock-amf
+      - ausf-control-plane
+    healthcheck:
+      test: ["CMD-SHELL", "bash -lc \"exec 3<>/dev/tcp/127.0.0.1/8080; printf 'GET /healthz HTTP/1.1\\r\\nHost: 127.0.0.1\\r\\nConnection: close\\r\\n\\r\\n' >&3; grep -q '200' <&3\""]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+
+  ausf-control-plane:
+    image: ausf-ausf-control-plane:latest
+    build:
+      context: ./control-plane
+      dockerfile: Dockerfile
+      target: runtime-from-source
+    container_name: ausf-control-plane
+    environment:
+      SERVER_PORT: 8081
+      AUSF_UDM_MODE: http
+      AUSF_UDM_BASE_URL: http://mock-udm:8090
+      AUSF_NNRF_BASE_URL: http://mock-nrf:8091
+      AUSF_SUBSCRIBER_DATASOURCE_URL: jdbc:postgresql://postgres:5432/ausf
+      AUSF_SUBSCRIBER_DATASOURCE_DRIVER: org.postgresql.Driver
+      AUSF_SUBSCRIBER_DATASOURCE_USERNAME: ausf
+      AUSF_SUBSCRIBER_DATASOURCE_PASSWORD: ausf
+    ports:
+      - "8081:8081"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mock-udm:
+        condition: service_started
+      mock-nrf:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "bash -lc \"exec 3<>/dev/tcp/127.0.0.1/8081; printf 'GET /healthz HTTP/1.1\\r\\nHost: 127.0.0.1\\r\\nConnection: close\\r\\n\\r\\n' >&3; grep -q '200' <&3\""]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s

@@ -1,0 +1,274 @@
+# ──────────────────────────────────────────────────────────────────────────────
+# Global
+# ──────────────────────────────────────────────────────────────────────────────
+nameOverride: ""
+fullnameOverride: ""
+
+namespace: ausf-system
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Go microservice (AUSF front-end / SBI gateway)
+# ──────────────────────────────────────────────────────────────────────────────
+microservice:
+  image:
+    repository: ghcr.io/cubasnik/ausf/microservice
+    tag: "1.0.0"
+    pullPolicy: IfNotPresent
+
+  replicaCount: 1
+
+  service:
+    type: ClusterIP
+    port: 8080
+
+  resources:
+    requests:
+      cpu: "50m"
+      memory: "64Mi"
+    limits:
+      cpu: "500m"
+      memory: "128Mi"
+
+  # Environment variables injected into the container.
+  # Sensitive values should be placed in existingSecret instead.
+  env:
+    AUSF_PORT: "8080"
+    AUSF_HOST: "0.0.0.0"
+    AUSF_AUTH_CONTEXT_TTL_SECONDS: "900"
+    AUSF_AUTH_CONTEXT_STORE_FILE: "/data/ausf-auth-contexts.json"
+    AUSF_CONTROL_PLANE_BREAKER_FAILURES: "5"
+    AUSF_CONTROL_PLANE_BREAKER_TIMEOUT_SECONDS: "10"
+    # Set to e.g. http://otel-collector:4318 to enable OTLP/HTTP tracing export
+    AUSF_OTLP_ENDPOINT: ""
+    # NF Overload Control threshold (TS 29.500 §6.5). 0 → built-in default 500.
+    AUSF_OVERLOAD_THRESHOLD: "500"
+
+  # Reference to a pre-existing Secret whose keys are merged into env.
+  # Leave empty to skip.
+  existingSecret: ""
+
+  # Persistent volume for auth-context file store.
+  persistence:
+    enabled: true
+    storageClass: ""
+    size: 100Mi
+    accessMode: ReadWriteOnce
+
+  podAnnotations: {}
+
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+  # Horizontal Pod Autoscaler.  Disabled by default (replicaCount governs scale).
+  hpa:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 5
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: ""
+
+  # PodDisruptionBudget — keeps at least 1 pod available during rolling updates.
+  pdb:
+    enabled: true
+    minAvailable: 1
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Java control-plane
+# ──────────────────────────────────────────────────────────────────────────────
+controlPlane:
+  image:
+    repository: ghcr.io/cubasnik/ausf/control-plane
+    tag: "1.0.0"
+    pullPolicy: IfNotPresent
+
+  replicaCount: 1
+
+  service:
+    type: ClusterIP
+    port: 8081
+
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "256Mi"
+    limits:
+      cpu: "1000m"
+      memory: "512Mi"
+
+  env:
+    SERVER_PORT: "8081"
+    AUSF_UDM_MODE: "http"
+    AUSF_UDM_BREAKER_FAILURES: "5"
+    AUSF_UDM_BREAKER_OPEN_SECONDS: "10"
+
+  existingSecret: ""
+
+  podAnnotations: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+  # Horizontal Pod Autoscaler.
+  hpa:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 3
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: ""
+
+  # PodDisruptionBudget.
+  pdb:
+    enabled: true
+    minAvailable: 1
+
+# ──────────────────────────────────────────────────────────────────────────────
+# NetworkPolicy (requires a CNI that supports NetworkPolicy, e.g. Calico/Cilium)
+# ──────────────────────────────────────────────────────────────────────────────
+networkPolicy:
+  # When true: control-plane accepts ingress only from microservice pods;
+  # microservice accepts SBI ingress from anywhere.
+  enabled: false
+
+# ──────────────────────────────────────────────────────────────────────────────
+# PostgreSQL (Bitnami sub-chart)
+# Set enabled: false and fill externalDatabase to use a pre-existing database.
+# ──────────────────────────────────────────────────────────────────────────────
+postgresql:
+  enabled: true
+  auth:
+    username: ausf
+    database: ausf
+    # Leave existingSecret empty to let the sub-chart generate a random password
+    # stored in <release>-postgresql.  Set to a pre-created Secret name to
+    # supply your own credentials.
+    existingSecret: ""
+    secretKeys:
+      # Key inside the Secret that holds the ausf user password.
+      userPasswordKey: password
+  primary:
+    persistence:
+      enabled: true
+      size: 8Gi
+    resources:
+      requests:
+        cpu: "100m"
+        memory: "256Mi"
+      limits:
+        cpu: "500m"
+        memory: "512Mi"
+
+# ──────────────────────────────────────────────────────────────────────────────
+# External database (used when postgresql.enabled=false)
+# ──────────────────────────────────────────────────────────────────────────────
+externalDatabase:
+  host: ""
+  port: 5432
+  database: ausf
+  username: ausf
+  # Name of a pre-existing Secret with a key holding the database password.
+  existingSecret: ""
+  existingSecretKey: password
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Namf async retry queue
+# ──────────────────────────────────────────────────────────────────────────────
+namfQueue:
+  # backend: "memory" — default, stateless in-memory retry queue
+  # backend: "redis"  — persistent Redis Streams queue; requires redis.enabled=true
+  #                      or a pre-existing Redis at namfQueue.redisURL.
+  backend: memory
+
+  # Redis connection URL used when backend=redis and redis.enabled=false.
+  # When redis.enabled=true the URL is derived automatically from the bundled Redis.
+  # Example: redis://:password@redis-host:6379/0
+  redisURL: ""
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Redis (Bitnami sub-chart) — disabled by default
+# Enable alongside namfQueue.backend=redis to get a durable retry queue.
+# ──────────────────────────────────────────────────────────────────────────────
+redis:
+  enabled: false
+  architecture: standalone
+  auth:
+    # Set enabled=true and provide a password for production deployments.
+    enabled: false
+  master:
+    persistence:
+      enabled: true
+      size: 1Gi
+    resources:
+      requests:
+        cpu: "50m"
+        memory: "64Mi"
+      limits:
+        cpu: "200m"
+        memory: "128Mi"
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Prometheus Operator integration
+# ServiceMonitor and PrometheusRule are only rendered when enabled.
+# ──────────────────────────────────────────────────────────────────────────────
+serviceMonitor:
+  # Set true when the Prometheus Operator CRD is installed in the cluster.
+  enabled: false
+  # Scrape interval (Prometheus Operator default is 30s).
+  interval: 30s
+  # Scrape timeout — must be ≤ interval.
+  scrapeTimeout: 10s
+  # Labels added to the ServiceMonitor so Prometheus picks it up.
+  # Match the labelSelector in your Prometheus CR's serviceMonitorSelector.
+  additionalLabels: {}
+
+prometheusRule:
+  # Set true when the Prometheus Operator CRD is installed in the cluster.
+  enabled: false
+  # Namespace for the PrometheusRule CR.  Defaults to .Values.namespace.
+  namespace: ""
+  # Extra labels on the PrometheusRule (must match Prometheus CR ruleSelector).
+  additionalLabels: {}
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Mock network functions (disable in production)
+# ──────────────────────────────────────────────────────────────────────────────
+mocks:
+  enabled: true
+
+  udm:
+    image:
+      repository: ghcr.io/cubasnik/ausf/mock-udm
+      tag: "1.0.0"
+      pullPolicy: IfNotPresent
+    service:
+      port: 8090
+
+  nrf:
+    image:
+      repository: ghcr.io/cubasnik/ausf/mock-nrf
+      tag: "1.0.0"
+      pullPolicy: IfNotPresent
+    service:
+      port: 8091
+
+  amf:
+    image:
+      repository: ghcr.io/cubasnik/ausf/mock-amf
+      tag: "1.0.0"
+      pullPolicy: IfNotPresent
+    service:
+      port: 8092
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Ingress (optional)
+# ──────────────────────────────────────────────────────────────────────────────
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: ausf.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []

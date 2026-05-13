@@ -1,0 +1,106 @@
+// Dev Container for the AUSF 5G Core polyglot workspace.
+// Provides Go 1.22, Java 25 (Temurin), Python 3.12, C++17/CMake, and Docker-in-Docker
+// so every Makefile target works without anything pre-installed on the host.
+//
+// Open with: VS Code → "Reopen in Container"  (Dev Containers extension required)
+{
+  "name": "AUSF 5G Core — polyglot workspace",
+
+  // ── Base image ────────────────────────────────────────────────────────────
+  // Ubuntu LTS with common developer tooling (curl, git, zsh, etc.)
+  "image": "mcr.microsoft.com/devcontainers/base:ubuntu-24.04",
+
+  // ── Dev Container Features ────────────────────────────────────────────────
+  // Each feature installs one runtime/toolchain into the image layer.
+  "features": {
+    // Go toolchain
+    "ghcr.io/devcontainers/features/go:1": {
+      "version": "1.22"
+    },
+    // Java 25 via Eclipse Temurin (EA build — latest available Temurin EA)
+    "ghcr.io/devcontainers/features/java:1": {
+      "version": "25-ea",
+      "jdkDistro": "ms",
+      "installMaven": true,
+      "mavenVersion": "3.9"
+    },
+    // Python 3.12
+    "ghcr.io/devcontainers/features/python:1": {
+      "version": "3.12"
+    },
+    // CMake + Ninja (for the C++ networking layer)
+    "ghcr.io/devcontainers/features/cmake:1": {
+      "version": "3.25"
+    },
+    // Docker-in-Docker so `docker compose up` works inside the container
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {
+      "version": "latest",
+      "dockerDashComposeVersion": "v2"
+    }
+  },
+
+  // ── Extra OS packages ─────────────────────────────────────────────────────
+  // gcc/g++ are needed to compile the C++ networking layer.
+  "onCreateCommand": "sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends gcc g++ make 2>&1 | tail -5",
+
+  // ── Post-create: verify toolchain + warm caches ───────────────────────────
+  "postCreateCommand": "bash .devcontainer/post-create.sh",
+
+  // ── VS Code extensions ────────────────────────────────────────────────────
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        // Go
+        "golang.go",
+        // Java
+        "redhat.java",
+        "vscjava.vscode-java-debug",
+        "vscjava.vscode-maven",
+        "vscjava.vscode-java-test",
+        // Python
+        "ms-python.python",
+        "ms-python.pylint",
+        // C++
+        "ms-vscode.cpptools",
+        "ms-vscode.cmake-tools",
+        // Docker / Compose
+        "ms-azuretools.vscode-docker",
+        // Kubernetes / Helm
+        "ms-kubernetes-tools.vscode-kubernetes-tools",
+        // YAML / JSON
+        "redhat.vscode-yaml",
+        // GitHub
+        "github.vscode-pull-request-github",
+        // Spell checker
+        "streetsidesoftware.code-spell-checker"
+      ],
+      "settings": {
+        // Go
+        "go.toolsManagement.checkForUpdates": "local",
+        "go.useLanguageServer": true,
+        // Java
+        "java.compile.nullAnalysis.mode": "automatic",
+        // Editor
+        "editor.formatOnSave": true,
+        "editor.tabSize": 4,
+        "files.trimTrailingWhitespace": true,
+        // Terminal
+        "terminal.integrated.defaultProfile.linux": "zsh"
+      }
+    }
+  },
+
+  // ── Container user ────────────────────────────────────────────────────────
+  "remoteUser": "vscode",
+
+  // ── Port forwards ─────────────────────────────────────────────────────────
+  // Match the ports exposed by docker-compose.yml for convenient browser access.
+  "forwardPorts": [8080, 8081, 8090, 8091, 8092],
+  "portsAttributes": {
+    "8080": { "label": "Go AUSF microservice" },
+    "8081": { "label": "Java control-plane" },
+    "8090": { "label": "Mock UDM" },
+    "8091": { "label": "Mock NRF" },
+    "8092": { "label": "Mock AMF" }
+  }
+}
