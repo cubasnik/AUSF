@@ -99,6 +99,7 @@ HEALTH_CONTAINERS = [
     "mock-amf",
     "ausf-control-plane",
     "ausf-go",
+    "ausf-go",
 ]
 
 

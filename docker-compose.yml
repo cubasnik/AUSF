@@ -93,11 +93,11 @@ services:
       - mock-amf
       - ausf-control-plane
     healthcheck:
-      test: ["CMD-SHELL", "bash -lc \"exec 3<>/dev/tcp/127.0.0.1/8080; printf 'GET /healthz HTTP/1.1\\r\\nHost: 127.0.0.1\\r\\nConnection: close\\r\\n\\r\\n' >&3; grep -q '200' <&3\""]
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8080/healthz"]
       interval: 5s
       timeout: 5s
       retries: 10
-      start_period: 5s
+      start_period: 10s
 
   ausf-control-plane:
     image: ausf-ausf-control-plane:latest
@@ -125,7 +125,7 @@ services:
       mock-nrf:
         condition: service_started
     healthcheck:
-      test: ["CMD-SHELL", "bash -lc \"exec 3<>/dev/tcp/127.0.0.1/8081; printf 'GET /healthz HTTP/1.1\\r\\nHost: 127.0.0.1\\r\\nConnection: close\\r\\n\\r\\n' >&3; grep -q '200' <&3\""]
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8081/healthz"]
       interval: 10s
       timeout: 10s
       retries: 12
