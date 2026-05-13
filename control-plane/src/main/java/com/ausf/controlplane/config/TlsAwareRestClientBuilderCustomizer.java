@@ -8,6 +8,7 @@ import java.security.GeneralSecurityException;
 import java.security.KeyStore;
 import java.security.cert.Certificate;
 import java.security.cert.CertificateFactory;
+import java.time.Duration;
 import java.util.Collection;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.TrustManagerFactory;
@@ -18,6 +19,10 @@ import org.springframework.web.client.RestClient;
 
 @Component
 public class TlsAwareRestClientBuilderCustomizer {
+
+    private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(5);
+    private static final Duration READ_TIMEOUT = Duration.ofSeconds(10);
+
     private final String caCertFile;
 
     public TlsAwareRestClientBuilderCustomizer(@Value("${ausf.tls.client.ca-cert-file:}") String caCertFile) {
@@ -26,14 +31,22 @@ public class TlsAwareRestClientBuilderCustomizer {
 
     public RestClient.Builder customize(RestClient.Builder builder) {
         if (caCertFile.isBlank()) {
-            return builder;
+            HttpClient httpClient = HttpClient.newBuilder()
+                .connectTimeout(CONNECT_TIMEOUT)
+                .build();
+            JdkClientHttpRequestFactory factory = new JdkClientHttpRequestFactory(httpClient);
+            factory.setReadTimeout(READ_TIMEOUT);
+            return builder.requestFactory(factory);
         }
 
         try {
             HttpClient httpClient = HttpClient.newBuilder()
+                .connectTimeout(CONNECT_TIMEOUT)
                 .sslContext(buildSslContext(Path.of(caCertFile)))
                 .build();
-            return builder.requestFactory(new JdkClientHttpRequestFactory(httpClient));
+            JdkClientHttpRequestFactory factory = new JdkClientHttpRequestFactory(httpClient);
+            factory.setReadTimeout(READ_TIMEOUT);
+            return builder.requestFactory(factory);
         } catch (IOException | GeneralSecurityException exception) {
             throw new IllegalStateException("Failed to configure TLS trust for outbound RestClient", exception);
         }
