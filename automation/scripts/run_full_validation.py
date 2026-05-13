@@ -118,22 +118,41 @@ def run_java_tests() -> None:
 
 def prepare_runtime_images_for_smoke_suite() -> bool:
     host_maven = resolve_host_maven()
-    if host_maven is None or FORCE_DOCKER_JAVA_TESTS:
-        return False
+    if not FORCE_DOCKER_JAVA_TESTS and host_maven is not None:
+        run_step(
+            "Package control-plane runtime JAR on host",
+            [
+                host_maven,
+                "-q",
+                "-DskipTests",
+                "package",
+            ],
+            cwd=ROOT / "control-plane",
+        )
+    else:
+        # In Docker-only mode (CI): use the already-built test image to package the JAR.
+        # JAVA_TEST_IMAGE already ran dependency:go-offline, so all deps are cached inside it.
+        # This avoids running mvn inside compose --build which has no cache in ephemeral CI runners.
+        run_step(
+            "Package control-plane runtime JAR in test container",
+            [
+                "docker",
+                "run",
+                "--rm",
+                "-v",
+                f"{(ROOT / 'control-plane').resolve()}:/app",
+                "-w",
+                "/app",
+                JAVA_TEST_IMAGE,
+                "mvn",
+                "-q",
+                "-DskipTests",
+                "package",
+            ],
+        )
 
     run_step(
-        "Package control-plane runtime JAR on host",
-        [
-            host_maven,
-            "-q",
-            "-DskipTests",
-            "package",
-        ],
-        cwd=ROOT / "control-plane",
-    )
-
-    run_step(
-        "Build control-plane runtime image from host JAR",
+        "Build control-plane runtime image from pre-built JAR",
         [
             "docker",
             "build",
