@@ -63,10 +63,6 @@ class NrfLifecycleManager {
             log.info("NRF base-url not configured — skipping NF registration");
             return;
         }
-        scheduler.execute(this::doRegister);
-    }
-
-    private void doRegister() {
         try {
             nnrfClient.registerNfProfile(nfInstanceId, buildNfProfile());
             registered = true;
