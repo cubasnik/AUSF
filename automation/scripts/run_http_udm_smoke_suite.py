@@ -9,7 +9,7 @@ from pathlib import Path
 AUTOMATION_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(AUTOMATION_ROOT / "src"))
 
-from compose_runtime import DEFAULT_SMOKE_RUNNER_ENV, compose_down, compose_up, restart_compose_service, run_compose_smoke_script, wait_for_containers
+from compose_runtime import DEFAULT_SMOKE_RUNNER_ENV, compose_down, compose_up, dump_container_logs, restart_compose_service, run_compose_smoke_script, wait_for_containers
 
 
 PYTHON = sys.executable
@@ -99,7 +99,6 @@ HEALTH_CONTAINERS = [
     "mock-amf",
     "ausf-control-plane",
     "ausf-go",
-    "ausf-go",
 ]
 
 
@@ -119,18 +118,35 @@ def run_host_smoke_script(script: str) -> None:
     subprocess.run(command, cwd=AUTOMATION_ROOT.parent, check=True)
 
 
+def _dump_all_container_logs() -> None:
+    for container in ["ausf-control-plane", "ausf-go", "mock-udm", "mock-nrf", "mock-amf", "ausf-postgres"]:
+        dump_container_logs(container)
+
+
 def main() -> int:
     args = parse_args()
     try:
         compose_up(skip_build=args.skip_build)
         wait_for_containers(HEALTH_CONTAINERS, timeout_seconds=180)
         for script in SMOKE_SCRIPTS:
-            run_compose_smoke_script(script, env=DEFAULT_SMOKE_RUNNER_ENV)
+            try:
+                run_compose_smoke_script(script, env=DEFAULT_SMOKE_RUNNER_ENV)
+            except Exception as exc:
+                print(f"\n!!! SMOKE SCRIPT FAILED: {script}", flush=True)
+                print(f"!!! Error: {exc}", flush=True)
+                _dump_all_container_logs()
+                raise
             for service_name in RESET_SERVICES_AFTER_SCRIPT.get(script, []):
                 restart_compose_service(service_name)
                 wait_for_containers([service_name])
         for script in HOST_LEVEL_SCRIPTS:
-            run_host_smoke_script(script)
+            try:
+                run_host_smoke_script(script)
+            except Exception as exc:
+                print(f"\n!!! HOST SCRIPT FAILED: {script}", flush=True)
+                print(f"!!! Error: {exc}", flush=True)
+                _dump_all_container_logs()
+                raise
     finally:
         compose_down(check=False)
     return 0
