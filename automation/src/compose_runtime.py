@@ -78,7 +78,7 @@ def read_container_health(container_name: str) -> str:
 def dump_container_logs(container_name: str) -> None:
     print(f"==> logs for {container_name}:", flush=True)
     subprocess.run(
-        ["docker", "logs", "--tail", "80", container_name],
+        ["docker", "logs", "--tail", "150", container_name],
         cwd=ROOT,
         check=False,
     )

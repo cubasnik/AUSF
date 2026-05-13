@@ -130,7 +130,7 @@ def main() -> int:
 
     try:
         compose_up(skip_build=args.skip_build)
-        wait_for_containers(HEALTH_CONTAINERS, timeout_seconds=180)
+        wait_for_containers(HEALTH_CONTAINERS, timeout_seconds=300)
         for script in SMOKE_SCRIPTS:
             try:
                 run_compose_smoke_script(script, env=DEFAULT_SMOKE_RUNNER_ENV)
@@ -153,10 +153,11 @@ def main() -> int:
         failed_script = failed_script or "<startup>"
         failed_exc = exc
     finally:
+        if failed_script is not None:
+            _dump_all_container_logs()
         compose_down(check=False)
 
     if failed_script is not None:
-        _dump_all_container_logs()
         sep = "=" * 60
         print(f"\n{sep}", flush=True)
         print(f"FAILED SCRIPT : {failed_script}", flush=True)
