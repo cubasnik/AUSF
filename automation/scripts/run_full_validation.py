@@ -16,7 +16,7 @@ from compose_runtime import build_compose_service
 
 ROOT = AUTOMATION_ROOT.parent
 PYTHON = sys.executable
-GO_IMAGE = "mcr.microsoft.com/devcontainers/go:1-1.22-bookworm"
+GO_IMAGE = "golang:1.26-bookworm"
 JAVA_TEST_IMAGE = "ausf-control-plane-test-base:java25"
 GO_TEST_PACKAGES = [
     "./internal/api",
