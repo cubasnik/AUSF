@@ -28,11 +28,11 @@ jobs:
           AUSF_FORCE_DOCKER_JAVA_TESTS: "1"
         run: python automation/scripts/run_full_validation.py
 
-      - name: Dump container state on failure
+      - name: Upload container logs on failure
         if: failure()
-        run: |
-          docker ps -a
-          for name in ausf-control-plane ausf-go mock-udm mock-nrf mock-amf ausf-postgres; do
-            echo "=== logs: $name ==="
-            docker logs --tail 100 $name 2>&1 || true
-          done
+        uses: actions/upload-artifact@v4
+        with:
+          name: container-logs
+          path: ci-container-logs/
+          if-no-files-found: ignore
+          retention-days: 7

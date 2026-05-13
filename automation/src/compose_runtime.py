@@ -75,13 +75,23 @@ def read_container_health(container_name: str) -> str:
     return result.stdout.strip()
 
 
+LOGS_DIR = ROOT / "ci-container-logs"
+
+
 def dump_container_logs(container_name: str) -> None:
     print(f"==> logs for {container_name}:", flush=True)
-    subprocess.run(
-        ["docker", "logs", "--tail", "150", container_name],
+    result = subprocess.run(
+        ["docker", "logs", "--tail", "300", container_name],
         cwd=ROOT,
         check=False,
+        capture_output=True,
+        text=True,
     )
+    output = result.stdout + result.stderr
+    print(output, flush=True)
+    # Also save to file so CI can upload as artifact
+    LOGS_DIR.mkdir(parents=True, exist_ok=True)
+    (LOGS_DIR / f"{container_name}.log").write_text(output, encoding="utf-8")
 
 
 def wait_for_container_health(container_name: str, timeout_seconds: int = 120) -> None:
@@ -98,23 +108,31 @@ def wait_for_container_health(container_name: str, timeout_seconds: int = 120) -
                 return
             if status in {"exited", "dead"}:
                 dump_container_logs(container_name)
+                _dump_docker_ps()
                 raise RuntimeError(f"container {container_name} entered status {status}")
             if status == "unhealthy":
                 if unhealthy_since is None:
                     unhealthy_since = now
-                    print(f"==> {container_name} unhealthy (will fail in 120s if not recovered)", flush=True)
-                elif now - unhealthy_since > 120:
+                    print(f"==> {container_name} unhealthy (will fail in 90s if not recovered)", flush=True)
+                elif now - unhealthy_since > 90:
                     dump_container_logs(container_name)
-                    raise RuntimeError(f"container {container_name} stuck unhealthy for >120s")
+                    _dump_docker_ps()
+                    raise RuntimeError(f"container {container_name} stuck unhealthy for >90s")
             # status is "starting" or something transient — log periodically
-            if now - last_log_time >= 30:
-                print(f"==> waiting for {container_name}: status={status}", flush=True)
+            if now - last_log_time >= 20:
+                print(f"==> waiting for {container_name}: status={status} elapsed={int(now - (deadline - timeout_seconds))}s", flush=True)
                 last_log_time = now
         except (subprocess.CalledProcessError, OSError) as error:
             last_error = error
         time.sleep(2)
     dump_container_logs(container_name)
+    _dump_docker_ps()
     raise RuntimeError(f"timed out waiting for container {container_name}: {last_error}")
+
+
+def _dump_docker_ps() -> None:
+    print("==> docker ps -a:", flush=True)
+    subprocess.run(["docker", "ps", "-a"], check=False)
 
 
 def wait_for_containers(containers: Iterable[str], timeout_seconds: int = 60) -> None:

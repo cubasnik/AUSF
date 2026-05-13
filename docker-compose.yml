@@ -128,5 +128,5 @@ services:
       test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8081/healthz"]
       interval: 10s
       timeout: 10s
-      retries: 12
-      start_period: 60s
+      retries: 18
+      start_period: 120s
