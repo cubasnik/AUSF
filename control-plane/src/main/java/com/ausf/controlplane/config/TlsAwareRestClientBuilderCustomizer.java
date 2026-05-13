@@ -24,12 +24,21 @@ public class TlsAwareRestClientBuilderCustomizer {
     private static final Duration READ_TIMEOUT = Duration.ofSeconds(10);
 
     private final String caCertFile;
+    private final boolean skip;
 
     public TlsAwareRestClientBuilderCustomizer(@Value("${ausf.tls.client.ca-cert-file:}") String caCertFile) {
+        this(caCertFile, false);
+    }
+
+    private TlsAwareRestClientBuilderCustomizer(String caCertFile, boolean skip) {
         this.caCertFile = caCertFile == null ? "" : caCertFile.trim();
+        this.skip = skip;
     }
 
     public RestClient.Builder customize(RestClient.Builder builder) {
+        if (skip) {
+            return builder;
+        }
         if (caCertFile.isBlank()) {
             HttpClient httpClient = HttpClient.newBuilder()
                 .connectTimeout(CONNECT_TIMEOUT)
@@ -53,7 +62,7 @@ public class TlsAwareRestClientBuilderCustomizer {
     }
 
     public static TlsAwareRestClientBuilderCustomizer noop() {
-        return new TlsAwareRestClientBuilderCustomizer("");
+        return new TlsAwareRestClientBuilderCustomizer("", true);
     }
 
     private SSLContext buildSslContext(Path certificatePath) throws IOException, GeneralSecurityException {
